@@ -6,6 +6,7 @@ import com.intellij.codeInsight.inline.completion.elements.InlineCompletionGrayT
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSingleSuggestion
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSuggestion
 import com.intellij.codeInsight.lookup.LookupManager
+import com.intellij.notification.NotificationType
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
@@ -20,6 +21,7 @@ import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings
 import ee.carlrobert.codegpt.settings.service.openai.OpenAISettings
+import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.StringUtil.extractUntilNewline
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
@@ -53,9 +55,17 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
         get() = CodeCompletionProviderPresentation()
 
     override suspend fun getSuggestionDebounced(request: InlineCompletionRequest): InlineCompletionSuggestion {
-        if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT
-            && service<CodeGPTServiceSettings>().state.nextEditsEnabled
+        val codegptSettings = service<CodeGPTServiceSettings>().state
+        if (GeneralSettings.getSelectedService() == ServiceType.CODEGPT && codegptSettings.nextEditsEnabled
         ) {
+            if (codegptSettings.codeCompletionSettings.codeCompletionsEnabled) {
+                codegptSettings.codeCompletionSettings.codeCompletionsEnabled = false
+                OverlayUtil.showNotification(
+                    "Code completions and multi-line edits cannot be active simultaneously.",
+                    NotificationType.WARNING
+                )
+            }
+
             predictNextEdit(request)
             return InlineCompletionSingleSuggestion.build(elements = emptyFlow())
         }
@@ -74,8 +84,6 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             project.service<GrpcClientService>().getNextEdit(request.editor)
         } catch (ex: Exception) {
             logger.error("Error communicating with server: ${ex.message}")
-        } finally {
-            CompletionProgressNotifier.update(project, false)
         }
     }
 
@@ -110,9 +118,7 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
                 .getCodeCompletionAsync(
                     infillRequest,
                     CodeCompletionMultiLineEventListener(request) {
-                        if (it.isEmpty() && service<CodeGPTServiceSettings>().state.nextEditsEnabled) {
-                            predictNextEdit(request)
-                        } else {
+                        if (LookupManager.getActiveLookup(request.editor) == null) {
                             trySend(InlineCompletionGrayTextElement(it))
                         }
                     }
@@ -147,10 +153,14 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
     }
 
     override suspend fun getDebounceDelay(request: InlineCompletionRequest): Duration {
-        return 600.toDuration(DurationUnit.MILLISECONDS)
+        return 400.toDuration(DurationUnit.MILLISECONDS)
     }
 
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
+        if (LookupManager.getActiveLookup(event.toRequest()?.editor) != null) {
+            return false
+        }
+
         val selectedService = GeneralSettings.getSelectedService()
         val codeCompletionsEnabled = when (selectedService) {
             ServiceType.CODEGPT -> service<CodeGPTServiceSettings>().state.codeCompletionSettings.codeCompletionsEnabled
@@ -163,19 +173,16 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             ServiceType.GOOGLE,
             null -> false
         }
-
-        if (!codeCompletionsEnabled) {
-            return selectedService == ServiceType.CODEGPT && service<CodeGPTServiceSettings>().state.nextEditsEnabled
-        }
-
-        if (LookupManager.getActiveLookup(event.toRequest()?.editor) != null) {
-            return false
-        }
-
-        val containsActiveCompletion =
+        val hasActiveCompletion =
             REMAINING_EDITOR_COMPLETION.get(event.toRequest()?.editor)?.isNotEmpty() ?: false
 
-        return event is InlineCompletionEvent.DocumentChange || containsActiveCompletion
+        if (!codeCompletionsEnabled) {
+            return selectedService == ServiceType.CODEGPT
+                    && service<CodeGPTServiceSettings>().state.nextEditsEnabled
+                    && !hasActiveCompletion
+        }
+
+        return event is InlineCompletionEvent.DocumentChange || hasActiveCompletion
     }
 
     private fun sendNextSuggestion(
