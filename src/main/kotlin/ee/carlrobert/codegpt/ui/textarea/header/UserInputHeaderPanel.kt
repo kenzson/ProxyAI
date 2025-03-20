@@ -15,7 +15,7 @@ import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.EditorNotifier
-import ee.carlrobert.codegpt.actions.IncludeFilesInContextNotifier
+import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.WrapLayout
 import ee.carlrobert.codegpt.ui.textarea.PromptTextField
 import ee.carlrobert.codegpt.ui.textarea.TagDetailsComparator
@@ -23,6 +23,10 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.suggestion.SuggestionsPopupManager
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.EditorUtil.getSelectedEditor
+import ee.carlrobert.codegpt.util.file.FileUtil
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.awt.*
 import java.awt.event.ActionListener
 import javax.swing.JButton
@@ -31,6 +35,7 @@ import javax.swing.JPanel
 class UserInputHeaderPanel(
     private val project: Project,
     private val tagManager: TagManager,
+    private val totalTokensPanel: TotalTokensPanel,
     suggestionsPopupManager: SuggestionsPopupManager,
     private val promptTextField: PromptTextField
 ) : JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)), TagManagerListener {
@@ -111,7 +116,8 @@ class UserInputHeaderPanel(
             .sortedWith(TagDetailsComparator())
             .toSet()
 
-        emptyText.isVisible = tags.none { it.selected }
+        updateReferencedFilesTokens(tags)
+        emptyText.isVisible = tags.isEmpty()
 
         tags.forEach { add(createTagPanel(it)) }
 
@@ -157,12 +163,27 @@ class UserInputHeaderPanel(
         }
 
         EditorUtil.getOpenLocalFiles(project)
-            .map { EditorTagDetails(it) }
-            .filterNot { it.virtualFile == selectedFile }
+            .filterNot { it == selectedFile }
             .take(INITIAL_VISIBLE_FILES)
             .forEach {
-                tagManager.addTag(it.apply { selected = false })
+                tagManager.addTag(EditorTagDetails(it).apply { selected = false })
             }
+    }
+
+    private fun updateReferencedFilesTokens(tags: Set<TagDetails>) {
+        CoroutineScope(Dispatchers.IO).launch {
+            val referencedFileContents = tags.asSequence()
+                .filter { it.selected }
+                .mapNotNull { tag ->
+                    when (tag) {
+                        is FileTagDetails -> FileUtil.readContent(tag.virtualFile)
+                        is EditorTagDetails -> FileUtil.readContent(tag.virtualFile)
+                        else -> null
+                    }
+                }
+                .toList()
+            totalTokensPanel.updateReferencedFilesTokens(referencedFileContents)
+        }
     }
 
     private fun initializeEventListeners() {
@@ -170,10 +191,6 @@ class UserInputHeaderPanel(
             subscribe(EditorNotifier.SelectionChange.TOPIC, EditorSelectionChangeListener())
             subscribe(EditorNotifier.Released.TOPIC, EditorReleasedListener())
             subscribe(FileEditorManagerListener.FILE_EDITOR_MANAGER, FileSelectionListener())
-            subscribe(
-                IncludeFilesInContextNotifier.FILES_INCLUDED_IN_CONTEXT_TOPIC,
-                IncludedFilesListener()
-            )
         }
     }
 
@@ -229,16 +246,14 @@ class UserInputHeaderPanel(
     private inner class FileSelectionListener : FileEditorManagerListener {
         override fun selectionChanged(event: FileEditorManagerEvent) {
             event.newFile?.let { newFile ->
-                val editorTagDetails = EditorTagDetails(newFile)
-                tagManager.addTag(editorTagDetails)
+                val containsTag = tagManager.getTags()
+                    .none { it is EditorTagDetails && it.virtualFile == newFile }
+                if (containsTag) {
+                    tagManager.addTag(EditorTagDetails(newFile).apply { selected = false })
+                }
+
                 emptyText.isVisible = false
             }
-        }
-    }
-
-    private inner class IncludedFilesListener : IncludeFilesInContextNotifier {
-        override fun filesIncluded(includedFiles: MutableList<VirtualFile>) {
-            includedFiles.forEach { tagManager.addTag(FileTagDetails(it)) }
         }
     }
 
