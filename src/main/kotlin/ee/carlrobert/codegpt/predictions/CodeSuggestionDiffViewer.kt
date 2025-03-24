@@ -50,7 +50,7 @@ import kotlin.math.max
 
 class CodeSuggestionDiffViewer(
     request: DiffRequest,
-    private val responseId: UUID,
+    val nextEditResponse: NextEditResponse,
     private val mainEditor: Editor,
     private val isManuallyOpened: Boolean
 ) : UnifiedDiffViewer(MyDiffContext(mainEditor.project), request), Disposable {
@@ -125,7 +125,8 @@ class CodeSuggestionDiffViewer(
         }
 
         application.executeOnPooledThread {
-            project?.service<GrpcClientService>()?.acceptEdit(responseId, change.toString())
+            project?.service<GrpcClientService>()
+                ?.acceptEdit(UUID.fromString(nextEditResponse.id), change.toString())
         }
     }
 
@@ -315,12 +316,8 @@ class CodeSuggestionDiffViewer(
             }
 
             val diffRequest = createSimpleDiffRequest(editor, nextRevision)
-            val diffViewer = CodeSuggestionDiffViewer(
-                diffRequest,
-                UUID.fromString(nextEditResponse.id),
-                editor,
-                isManuallyOpened
-            )
+            val diffViewer =
+                CodeSuggestionDiffViewer(diffRequest, nextEditResponse, editor, isManuallyOpened)
             editor.putUserData(CodeGPTKeys.EDITOR_PREDICTION_DIFF_VIEWER, diffViewer)
             diffViewer.rediff(true)
         }
