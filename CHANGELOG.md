@@ -6,6 +6,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.1-241.1] - 2025-03-24
+
 ### Added
 
 - Re-add logic to include the active editor selection when creating a new chat
@@ -940,7 +942,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.0-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.1-241.1...HEAD
+[3.1.1-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.0-241.1...v3.1.1-241.1
 [3.1.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.0.0-241.1...v3.1.0-241.1
 [3.0.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v2.16.4-241.1...v3.0.0-241.1
 [2.16.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v2.16.3-241.1...v2.16.4-241.1
