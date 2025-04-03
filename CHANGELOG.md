@@ -6,6 +6,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.1-241.1] - 2025-04-03
+
+### Added
+
+- Gemini 2.5 Pro (exp) model
+
+### Fixed
+
+- Toolwindow ID inconsistencies
+- EDT issues when reading files on submit
+
+### Removed
+
+- Clear tags action from editor's context menu
+
 ## [3.2.0-241.1] - 2025-03-28
 
 ### Added
@@ -951,7 +966,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.0-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.1-241.1...HEAD
+[3.2.1-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.0-241.1...v3.2.1-241.1
 [3.2.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.1-241.1...v3.2.0-241.1
 [3.1.1-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.0-241.1...v3.1.1-241.1
 [3.1.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.0.0-241.1...v3.1.0-241.1
