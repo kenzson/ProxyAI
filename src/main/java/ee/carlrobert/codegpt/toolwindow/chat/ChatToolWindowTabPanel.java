@@ -1,7 +1,6 @@
 package ee.carlrobert.codegpt.toolwindow.chat;
 
 import static ee.carlrobert.codegpt.ui.UIUtil.createScrollPaneWithSmartScroller;
-import static java.lang.String.format;
 
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.ApplicationManager;
@@ -16,6 +15,7 @@ import ee.carlrobert.codegpt.ReferencedFile;
 import ee.carlrobert.codegpt.actions.ActionType;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
 import ee.carlrobert.codegpt.completions.CompletionRequestService;
+import ee.carlrobert.codegpt.completions.CompletionRequestUtil;
 import ee.carlrobert.codegpt.completions.ConversationType;
 import ee.carlrobert.codegpt.completions.ToolwindowChatCompletionRequestHandler;
 import ee.carlrobert.codegpt.conversations.Conversation;
@@ -47,7 +47,6 @@ import ee.carlrobert.codegpt.ui.textarea.header.tag.TagDetails;
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager;
 import ee.carlrobert.codegpt.util.EditorUtil;
 import ee.carlrobert.codegpt.util.coroutines.CoroutineDispatchers;
-import ee.carlrobert.codegpt.util.file.FileUtil;
 import git4idea.GitCommit;
 import java.awt.BorderLayout;
 import java.util.HashSet;
@@ -185,6 +184,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     return tags.stream()
         .map(this::getVirtualFile)
         .filter(Objects::nonNull)
+        .distinct()
         .map(ReferencedFile::from)
         .toList();
   }
@@ -287,6 +287,7 @@ public class ChatToolWindowTabPanel implements Disposable {
         false,
         message.isWebSearchIncluded(),
         fileContextIncluded || message.getDocumentationDetails() != null,
+        true,
         this));
     return panel;
   }
@@ -368,31 +369,38 @@ public class ChatToolWindowTabPanel implements Disposable {
   }
 
   private Unit handleSubmit(String text) {
-    final Set<ClassStructure> psiStructure;
-    if (psiStructureRepository.getStructureState().getValue()
-        instanceof PsiStructureState.Content content) {
-      psiStructure = content.getElements();
-    } else {
-      psiStructure = new HashSet<>();
-    }
+    toolWindowScrollablePanel.scrollToBottom();
 
-    final var appliedTags = tagManager.getTags().stream()
-        .filter(TagDetails::getSelected)
-        .collect(Collectors.toList());
+    var application = ApplicationManager.getApplication();
+    application.executeOnPooledThread(() -> {
+      final Set<ClassStructure> psiStructure;
+      if (psiStructureRepository.getStructureState().getValue()
+          instanceof PsiStructureState.Content content) {
+        psiStructure = content.getElements();
+      } else {
+        psiStructure = new HashSet<>();
+      }
 
-    var messageBuilder = new MessageBuilder(project, text).withInlays(appliedTags);
+      final var appliedTags = tagManager.getTags().stream()
+          .filter(TagDetails::getSelected)
+          .collect(Collectors.toList());
 
-    List<ReferencedFile> referencedFiles = getReferencedFiles(appliedTags);
-    if (!referencedFiles.isEmpty()) {
-      messageBuilder.withReferencedFiles(referencedFiles);
-    }
+      var messageBuilder = new MessageBuilder(project, text).withInlays(appliedTags);
 
-    String attachedImagePath = CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project);
-    if (attachedImagePath != null) {
-      messageBuilder.withImage(attachedImagePath);
-    }
+      List<ReferencedFile> referencedFiles = getReferencedFiles(appliedTags);
+      if (!referencedFiles.isEmpty()) {
+        messageBuilder.withReferencedFiles(referencedFiles);
+      }
 
-    sendMessage(messageBuilder.build(), ConversationType.DEFAULT, psiStructure);
+      String attachedImagePath = CodeGPTKeys.IMAGE_ATTACHMENT_FILE_PATH.get(project);
+      if (attachedImagePath != null) {
+        messageBuilder.withImage(attachedImagePath);
+      }
+
+      application.invokeLater(() -> {
+        sendMessage(messageBuilder.build(), ConversationType.DEFAULT, psiStructure);
+      });
+    });
     return Unit.INSTANCE;
   }
 
@@ -428,10 +436,10 @@ public class ChatToolWindowTabPanel implements Disposable {
         return Unit.INSTANCE;
       }
 
-      var fileExtension = FileUtil.getFileExtension(editor.getVirtualFile().getName());
-      var message = new Message(action.getPrompt().replace(
-          "{SELECTION}",
-          format("%n```%s%n%s%n```", fileExtension, editor.getSelectionModel().getSelectedText())));
+      var formattedCode = CompletionRequestUtil.formatCode(
+          editor.getSelectionModel().getSelectedText(),
+          editor.getVirtualFile().getPath());
+      var message = new Message(action.getPrompt().replace("{SELECTION}", formattedCode));
       sendMessage(message, ConversationType.DEFAULT);
       return Unit.INSTANCE;
     });

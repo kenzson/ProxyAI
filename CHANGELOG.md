@@ -6,6 +6,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.5-241.1] - 2025-04-30
+
+### Added
+
+- Apply changes even if the target file isn't open
+- Support for creating new files using the 'Apply Changes' action
+- Apply and Reject buttons to the diff toolbar
+
+## [3.2.4-241.1] - 2025-04-23
+
+### Added
+
+- GPT-4.1 models for OpenAI provider
+
+### Fixed
+
+- Internal errors and warnings caused by recent IDE upgrade
+
+## [3.2.3-241.1] - 2025-04-16
+
+### Added
+
+- GPT-4.1 models for ProxyAI users 
+- Import/Export functionality for Personas
+
+### Fixed
+
+- Duplicate chat referenced files
+- Several IDE warnings/errors
+
 ## [3.2.2-241.1] - 2025-04-06
 
 ### Added
@@ -978,7 +1008,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.2-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.5-241.1...HEAD
+[3.2.5-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.4-241.1...v3.2.5-241.1
+[3.2.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.3-241.1...v3.2.4-241.1
+[3.2.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.2-241.1...v3.2.3-241.1
 [3.2.2-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.1-241.1...v3.2.2-241.1
 [3.2.1-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.0-241.1...v3.2.1-241.1
 [3.2.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.1.1-241.1...v3.2.0-241.1

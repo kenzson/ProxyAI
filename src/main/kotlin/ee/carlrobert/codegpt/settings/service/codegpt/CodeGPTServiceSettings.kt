@@ -17,10 +17,10 @@ class CodeGPTServiceSettingsState : BaseState() {
 }
 
 class CodeGPTServiceChatCompletionSettingsState : BaseState() {
-    var model by string("gpt-4o-mini")
+    var model by string("gpt-4.1-mini")
 }
 
 class CodeGPTServiceCodeCompletionSettingsState : BaseState() {
-    var codeCompletionsEnabled by property(false)
-    var model by string("codestral")
+    var codeCompletionsEnabled by property(true)
+    var model by string(CodeGPTAvailableModels.DEFAULT_CODE_MODEL.toString())
 }

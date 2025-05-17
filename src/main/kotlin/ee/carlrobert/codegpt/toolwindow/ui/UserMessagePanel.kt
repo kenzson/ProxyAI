@@ -149,7 +149,7 @@ class UserMessagePanel(
 
     private fun setupResponseBody() {
         addContent(
-            ChatMessageResponseBody(project, true, false, false, parentDisposable)
+            ChatMessageResponseBody(project, true, false, false, false, parentDisposable)
                 .withResponse(message.prompt)
         )
     }
