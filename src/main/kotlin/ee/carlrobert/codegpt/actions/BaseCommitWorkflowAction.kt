@@ -23,13 +23,12 @@ import ee.carlrobert.codegpt.completions.CompletionRequestService
 import ee.carlrobert.codegpt.util.ThinkingOutputParser
 import ee.carlrobert.codegpt.ui.OverlayUtil
 import ee.carlrobert.codegpt.util.CommitWorkflowChanges
-import ee.carlrobert.codegpt.util.GitUtil.getProjectRepository
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails
 import ee.carlrobert.llm.completion.CompletionEventListener
-import git4idea.repo.GitRepository
 import okhttp3.sse.EventSource
 import java.io.StringWriter
 import java.nio.file.Path
+import java.nio.file.Paths
 
 abstract class BaseCommitWorkflowAction : DumbAwareAction() {
 
@@ -80,16 +79,8 @@ abstract class BaseCommitWorkflowAction : DumbAwareAction() {
         return generateDiff(
             project,
             commitWorkflowUi.getIncludedChanges(),
-            getRepository(project).root.toNioPath()
+            Paths.get(project.getBasePath())
         )
-    }
-
-    private fun getRepository(project: Project): GitRepository {
-        return runCatching {
-            ApplicationManager.getApplication()
-                .executeOnPooledThread<GitRepository?> { getProjectRepository(project) }
-                .get()
-        }.getOrNull() ?: throw IllegalStateException("No repository found for the project.")
     }
 
     private fun generateDiff(
