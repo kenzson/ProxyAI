@@ -9,9 +9,12 @@ import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.JBMenuItem
 import com.intellij.openapi.ui.JBPopupMenu
+import com.intellij.openapi.ui.MessageType
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.readText
 import com.intellij.openapi.vfs.writeText
 import com.intellij.ui.AnimatedIcon
+import com.intellij.ui.components.AnActionLink
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -64,7 +67,7 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
             actionGroup.add(CopyAction(editor))
         } else {
             actionGroup.add(AutoApplyAction(project, editor, config.filePath, virtualFile) {
-                handleApply(project, editor)
+                handleApply(project, editor, it)
             })
             actionGroup.add(CopyAction(editor))
             actionGroup.addSeparator()
@@ -73,7 +76,7 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         return createToolbar(actionGroup)
     }
 
-    private fun handleApply(project: Project, editor: EditorEx) {
+    private fun handleApply(project: Project, editor: EditorEx, link: AnActionLink) {
         val file = virtualFile
             ?: EditorUtil.getSelectedEditor(project)?.virtualFile
             ?: throw IllegalStateException("Virtual file is null")
@@ -82,8 +85,21 @@ class DefaultHeaderPanel(config: HeaderConfig) : HeaderPanel(config) {
         val coefficient = StringUtil.getDiceCoefficient(editor.document.text, file.readText())
         if (coefficient > directApplyThreshold) {
             runUndoTransparentWriteAction {
-                file.writeText(editor.document.text)
+                file.writeText(
+                    com.intellij.openapi.util.text.StringUtil.convertLineSeparators(
+                        editor.document.text
+                    )
+                )
             }
+            val balloon = JBPopupFactory.getInstance()
+                .createHtmlTextBalloonBuilder(
+                    CodeGPTBundle.get("toolwindow.chat.editor.action.autoApply.successMessage"),
+                    MessageType.INFO,
+                    null
+                )
+                .setFadeoutTime(3000)
+                .createBalloon()
+            balloon.showInCenterOf(link)
             return
         }
 

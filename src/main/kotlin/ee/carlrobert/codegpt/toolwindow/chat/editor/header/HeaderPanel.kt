@@ -9,6 +9,7 @@ import com.intellij.openapi.application.runUndoTransparentWriteAction
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.writeText
@@ -23,7 +24,6 @@ import java.awt.BorderLayout
 import java.awt.Dimension
 import java.awt.FlowLayout
 import java.io.File
-import javax.swing.Box
 import javax.swing.BoxLayout
 import javax.swing.JComponent
 import javax.swing.JPanel
@@ -108,10 +108,16 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
         minimumSize = Dimension(preferredSize.width, 32)
     }
 
+    private fun isProjectPath(path: String): Boolean {
+        return config.project.basePath?.let {
+            return path.startsWith(it)
+        } ?: false
+    }
+
     private fun createLeftPanel(virtualFile: VirtualFile?): JComponent {
         val filePath = config.filePath
         val linkOrLabel = when {
-            filePath == null -> createLanguageLabel()
+            filePath == null || !isProjectPath(filePath) -> createLanguageLabel()
             virtualFile == null -> createNewFileLink(filePath, config.editorEx)
             else -> createFileLinkPanel(virtualFile)
         }
@@ -166,7 +172,7 @@ abstract class HeaderPanel(protected val config: HeaderConfig) : BorderLayoutPan
             LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)?.let { newFile ->
                 runInEdt {
                     runUndoTransparentWriteAction {
-                        newFile.writeText(content)
+                        newFile.writeText(StringUtil.convertLineSeparators(content))
                     }
 
                     remove(actionLink)

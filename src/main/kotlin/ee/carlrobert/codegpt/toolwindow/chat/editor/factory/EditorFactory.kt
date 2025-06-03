@@ -15,6 +15,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.readText
 import com.intellij.ui.ColorUtil
+import com.intellij.util.application
 import com.intellij.util.ui.JBUI
 import com.intellij.vcsUtil.VcsUtil.getVirtualFile
 import ee.carlrobert.codegpt.CodeGPTKeys
@@ -38,7 +39,6 @@ object EditorFactory {
         val content = segment.content
         val languageMapping = FileUtil.findLanguageExtensionMapping(segment.language)
         val isDiffType = isDiffType(segment, content)
-
         return invokeAndWaitIfNeeded {
             val editor = if (isDiffType) {
                 createDiffEditor(project, segment)
@@ -47,12 +47,13 @@ object EditorFactory {
                 EditorUtil.createEditor(project, languageMapping.value, content)
             } as EditorEx
             segment.filePath?.let { filePath ->
-                CodeGPTKeys.TOOLWINDOW_EDITOR_FILE_DETAILS.set(
-                    editor,
-                    ToolWindowEditorFileDetails(filePath, getVirtualFile(filePath))
-                )
+                application.executeOnPooledThread {
+                    CodeGPTKeys.TOOLWINDOW_EDITOR_FILE_DETAILS.set(
+                        editor,
+                        ToolWindowEditorFileDetails(filePath, getVirtualFile(filePath))
+                    )
+                }
                 DiffSyncManager.registerEditor(filePath, editor)
-
             }
             editor
         }
