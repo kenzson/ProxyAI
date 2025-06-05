@@ -5,17 +5,14 @@ import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.util.DiffUtil
 import com.intellij.diff.util.Side
 import com.intellij.openapi.application.runInEdt
-import com.intellij.openapi.application.runWriteAction
 import com.intellij.openapi.diff.DiffBundle
-import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.LogicalPosition
 import com.intellij.openapi.editor.ScrollType
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.text.StringUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.readText
-import com.intellij.util.concurrency.annotations.RequiresEdt
-import ee.carlrobert.codegpt.toolwindow.chat.editor.diff.DiffManagerUtil.replaceContent
+import com.intellij.util.application
 
 class DiffEditorManager(
     private val project: Project,
@@ -27,14 +24,21 @@ class DiffEditorManager(
         val currentText = virtualFile?.readText() ?: return
         val document = diffViewer.getDocument(Side.RIGHT)
 
-        runInEdt {
-            document.replaceContent(
-                project,
-                currentText.replaceLast(searchContent.trim(), replaceContent.trim())
-            )
+        application.executeOnPooledThread {
+            runInEdt {
+                if (DiffUtil.executeWriteCommand(document, project, "Updating document") {
+                        document.setText(
+                            StringUtil.convertLineSeparators(
+                                currentText.replaceLast(searchContent.trim(), replaceContent.trim())
+                            )
+                        )
 
-            diffViewer.rediff()
-            scrollToLastChange(diffViewer)
+                        diffViewer.scheduleRediff()
+                    }) {
+                    diffViewer.rediff()
+                    scrollToLastChange(diffViewer)
+                }
+            }
         }
     }
 
@@ -46,8 +50,6 @@ class DiffEditorManager(
 
     fun applyAllChanges(): List<UnifiedDiffChange> {
         val document = diffViewer.getDocument(Side.LEFT)
-        DiffManagerUtil.ensureDocumentWritable(project, document)
-
         val allChanges = mutableListOf<UnifiedDiffChange>()
 
         while (true) {
@@ -62,9 +64,7 @@ class DiffEditorManager(
                 DiffBundle.message("message.replace.change.command")
             ) {
                 diffViewer.replaceChange(change, Side.RIGHT)
-                runInEdt {
-                    diffViewer.scheduleRediff()
-                }
+                diffViewer.scheduleRediff()
             }
             diffViewer.rediff(true)
 
@@ -80,23 +80,5 @@ class DiffEditorManager(
             LogicalPosition(change.lineFragment.startLine2, 0),
             ScrollType.CENTER
         )
-    }
-}
-
-object DiffManagerUtil {
-
-    @RequiresEdt
-    fun Document.replaceContent(project: Project, replaceContent: String) {
-        ensureDocumentWritable(project, this)
-        DiffUtil.executeWriteCommand(this, project, "Updating document") {
-            setText(StringUtil.convertLineSeparators(replaceContent))
-        }
-    }
-
-    fun ensureDocumentWritable(project: Project, document: Document) {
-        if (!document.isWritable) {
-            DiffUtil.makeWritable(project, document)
-            document.setReadOnly(false)
-        }
     }
 }
