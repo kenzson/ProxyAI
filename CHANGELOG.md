@@ -6,6 +6,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.2-241.1] - 2025-06-06
+
+### Fixed
+
+- Compatibility issues with the latest IDEs
+
+### Added
+
+- Global context search (users can now perform a speed search without selecting a group first)
+
 ## [3.4.1-241.1] - 2025-06-04
 
 ### Fixed
@@ -1036,7 +1046,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.1-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.2-241.1...HEAD
+[3.4.2-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.1-241.1...v3.4.2-241.1
 [3.4.1-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.0-241.1...v3.4.1-241.1
 [3.4.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.3.0-241.1...v3.4.0-241.1
 [3.3.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.2.5-241.1...v3.3.0-241.1
