@@ -6,14 +6,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0-241.1] - 2025-07-24
+
 ### Added
 
-- Kimi K2 model (ProxyAI)
+- Qwen3 Code model for Free and Pro tiers
 - Native Mistral client support
 - New Chat History UI/UX
 - Server and build logs for llama.cpp
 - Support for model per feature
 - Support for PSI analysis (Code Analyze) of added files
+- Support for cancelling auto apply requests
 
 ### Updated
 
@@ -1092,7 +1095,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.4-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.5.0-241.1...HEAD
+[3.5.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.4-241.1...v3.5.0-241.1
 [3.4.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.3-241.1...v3.4.4-241.1
 [3.4.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.2-241.1...v3.4.3-241.1
 [3.4.2-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.1-241.1...v3.4.2-241.1
