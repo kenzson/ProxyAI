@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.1-241.1] - 2025-09-03
+
+### Added
+
+- GPT-5 model support
+- Chat-based FIM code completion for Custom OpenAI providers
+- Chinese language support
+
+### Fixed
+
+- Edit Code prompt regression issue [#1070](https://github.com/carlrobertoh/ProxyAI/issues/1070)
+- Custom OpenAI services not adhering to model selections
+
 ## [3.5.0-241.1] - 2025-07-24
 
 ### Added
@@ -1095,7 +1108,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.5.0-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.5.1-241.1...HEAD
+[3.5.1-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.5.0-241.1...v3.5.1-241.1
 [3.5.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.4-241.1...v3.5.0-241.1
 [3.4.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.3-241.1...v3.4.4-241.1
 [3.4.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.4.2-241.1...v3.4.3-241.1
