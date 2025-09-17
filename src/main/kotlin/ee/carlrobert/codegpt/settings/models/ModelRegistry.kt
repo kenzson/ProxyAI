@@ -48,7 +48,7 @@ class ModelRegistry {
                 FeatureType.CODE_COMPLETION,
                 FeatureType.AUTO_APPLY,
                 FeatureType.COMMIT_MESSAGE,
-                FeatureType.EDIT_CODE,
+                FeatureType.INLINE_EDIT,
                 FeatureType.NEXT_EDIT,
                 FeatureType.LOOKUP
             )
@@ -57,49 +57,49 @@ class ModelRegistry {
             ServiceType.OPENAI,
             setOf(
                 FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
-                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+                FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
             )
         ),
         ServiceType.ANTHROPIC to ModelCapability(
             ServiceType.ANTHROPIC,
             setOf(
                 FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE,
-                FeatureType.EDIT_CODE, FeatureType.LOOKUP
+                FeatureType.INLINE_EDIT, FeatureType.LOOKUP
             )
         ),
         ServiceType.GOOGLE to ModelCapability(
             ServiceType.GOOGLE,
             setOf(
                 FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE,
-                FeatureType.EDIT_CODE, FeatureType.LOOKUP
+                FeatureType.INLINE_EDIT, FeatureType.LOOKUP
             )
         ),
         ServiceType.MISTRAL to ModelCapability(
             ServiceType.MISTRAL,
             setOf(
                 FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
-                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+                FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
             )
         ),
         ServiceType.OLLAMA to ModelCapability(
             ServiceType.OLLAMA,
             setOf(
                 FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
-                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+                FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
             )
         ),
         ServiceType.LLAMA_CPP to ModelCapability(
             ServiceType.LLAMA_CPP,
             setOf(
                 FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
-                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+                FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
             )
         ),
         ServiceType.CUSTOM_OPENAI to ModelCapability(
             ServiceType.CUSTOM_OPENAI,
             setOf(
                 FeatureType.CHAT, FeatureType.CODE_COMPLETION, FeatureType.AUTO_APPLY,
-                FeatureType.COMMIT_MESSAGE, FeatureType.EDIT_CODE, FeatureType.LOOKUP
+                FeatureType.COMMIT_MESSAGE, FeatureType.INLINE_EDIT, FeatureType.LOOKUP
             )
         )
     )
@@ -121,7 +121,7 @@ class ModelRegistry {
                 GPT_5_MINI,
                 "GPT-5 Mini"
             ),
-            FeatureType.EDIT_CODE to ModelSelection(
+            FeatureType.INLINE_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
                 GPT_5_MINI,
                 "GPT-5 Mini"
@@ -150,7 +150,7 @@ class ModelRegistry {
                 QWEN3_CODER,
                 "Qwen3 Coder"
             ),
-            FeatureType.EDIT_CODE to ModelSelection(
+            FeatureType.INLINE_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
                 QWEN3_CODER,
                 "Qwen3 Coder"
@@ -171,7 +171,7 @@ class ModelRegistry {
             ),
             FeatureType.AUTO_APPLY to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
             FeatureType.COMMIT_MESSAGE to ModelSelection(ServiceType.PROXYAI, GPT_5, "GPT-5"),
-            FeatureType.EDIT_CODE to ModelSelection(
+            FeatureType.INLINE_EDIT to ModelSelection(
                 ServiceType.PROXYAI,
                 CLAUDE_4_SONNET,
                 "Claude 4 Sonnet"
@@ -202,7 +202,7 @@ class ModelRegistry {
             GPT_5_MINI,
             "GPT-5 Mini"
         ),
-        FeatureType.EDIT_CODE to ModelSelection(ServiceType.PROXYAI, GPT_5_MINI, "GPT-5 Mini"),
+        FeatureType.INLINE_EDIT to ModelSelection(ServiceType.PROXYAI, GPT_5_MINI, "GPT-5 Mini"),
         FeatureType.LOOKUP to ModelSelection(ServiceType.PROXYAI, GPT_5_MINI, "GPT-5 Mini"),
         FeatureType.CODE_COMPLETION to ModelSelection(
             ServiceType.PROXYAI,
@@ -215,7 +215,7 @@ class ModelRegistry {
     fun getAllModelsForFeature(featureType: FeatureType): List<ModelSelection> {
         return when (featureType) {
             FeatureType.CHAT, FeatureType.AUTO_APPLY, FeatureType.COMMIT_MESSAGE,
-            FeatureType.EDIT_CODE, FeatureType.LOOKUP -> getAllChatModels()
+            FeatureType.INLINE_EDIT, FeatureType.LOOKUP -> getAllChatModels()
 
             FeatureType.CODE_COMPLETION -> getAllCodeModels()
             FeatureType.NEXT_EDIT -> getNextEditModels()
@@ -286,17 +286,15 @@ class ModelRegistry {
         return try {
             val customServicesSettings = service<CustomServicesSettings>()
             customServicesSettings.state.services.mapNotNull { service ->
-                if (service.name.isNullOrBlank()) {
-                    return@mapNotNull null
-                }
+                val serviceId = service.id ?: return@mapNotNull null
+                val serviceName = service.name ?: ""
+                val modelFromBody = service.codeCompletionSettings.body["model"]
+                val modelName = (modelFromBody as? String)
+                val displayName = if (!modelName.isNullOrEmpty()) {
+                    if (modelName.length > 20) "$serviceName (...${modelName.takeLast(20)})" else "$serviceName ($modelName)"
+                } else serviceName
 
-                service.name?.let { serviceName ->
-                    val modelFromBody = service.codeCompletionSettings.body["model"]
-                    val modelName = (modelFromBody as? String) ?: "Unknown Model"
-                    val displayName = "$serviceName ($modelName)"
-
-                    ModelSelection(ServiceType.CUSTOM_OPENAI, serviceName, displayName)
-                }
+                ModelSelection(ServiceType.CUSTOM_OPENAI, serviceId, displayName)
             }
         } catch (e: Exception) {
             logger.error("Failed to get Custom OpenAI code models", e)
@@ -524,20 +522,14 @@ class ModelRegistry {
         return try {
             val customServicesSettings = service<CustomServicesSettings>()
             customServicesSettings.state.services.mapNotNull { service ->
-                if (service.name.isNullOrBlank()) {
-                    return@mapNotNull null
-                }
+                val serviceId = service.id ?: return@mapNotNull null
+                val serviceName = service.name ?: ""
+                val modelName = service.chatCompletionSettings.body["model"] as? String
+                val displayName = if (!modelName.isNullOrEmpty()) {
+                    if (modelName.length > 20) "$serviceName (...${modelName.takeLast(20)})" else "$serviceName ($modelName)"
+                } else serviceName
 
-                service.name?.let { serviceName ->
-                    val modelName = service.chatCompletionSettings.body["model"] as? String
-                    val displayName = if (modelName != null) {
-                        "$serviceName ($modelName)"
-                    } else {
-                        serviceName
-                    }
-
-                    ModelSelection(ServiceType.CUSTOM_OPENAI, serviceName, displayName)
-                }
+                ModelSelection(ServiceType.CUSTOM_OPENAI, serviceId, displayName)
             }
         } catch (e: Exception) {
             logger.error("Failed to get Custom OpenAI models", e)

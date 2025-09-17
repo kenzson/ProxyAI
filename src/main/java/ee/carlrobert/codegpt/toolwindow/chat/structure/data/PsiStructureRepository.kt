@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.progress.ProcessCanceledException
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.AsyncFileListener
@@ -181,8 +182,11 @@ class PsiStructureRepository(
                             coroutineContext.ensureActive()
                             try {
                                 PsiManager.getInstance(project).findFile(virtualFile)
-                            } catch (exc: Exception) {
-                                logger.warn("Failed to find file ${virtualFile.name}", exc)
+                            } catch (ex: Exception) {
+                                if (ex is ProcessCanceledException) {
+                                    throw ex
+                                }
+                                logger.warn("Failed to find file ${virtualFile.name}", ex)
                                 null
                             }
                         }
@@ -226,6 +230,7 @@ class PsiStructureRepository(
                     is WebTagDetails -> null
                     is ImageTagDetails -> null
                     is CodeAnalyzeTagDetails -> null
+                    is DiagnosticsTagDetails -> null
                 }
 
                 virtualFile?.takeIf { it.isValid && it.exists()}
@@ -253,6 +258,7 @@ class PsiStructureRepository(
                 is WebTagDetails -> false
                 is ImageTagDetails -> false
                 is CodeAnalyzeTagDetails -> false
+                is DiagnosticsTagDetails -> false
             }
         }
             .toSet()
@@ -280,6 +286,7 @@ class PsiStructureRepository(
                     is WebTagDetails -> null
                     is ImageTagDetails -> null
                     is CodeAnalyzeTagDetails -> null
+                    is DiagnosticsTagDetails -> null
                 }
 
                 virtualFile?.takeIf { it.isValid && it.exists()}
