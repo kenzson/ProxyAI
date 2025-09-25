@@ -27,6 +27,7 @@ class ConfigurationSettingsState : BaseState() {
     var temperature by property(0.1f) { max(0f, min(1f, it)) }
     var checkForPluginUpdates by property(true)
     var checkForNewScreenshots by property(true)
+    var screenshotWatchPaths by list<String>()
     var ignoreGitCommitTokenLimit by property(false)
     var methodNameGenerationEnabled by property(true)
     var captureCompileErrors by property(true)
@@ -37,6 +38,10 @@ class ConfigurationSettingsState : BaseState() {
 
     init {
         tableData.putAll(EditorActionsUtil.DEFAULT_ACTIONS)
+
+        if (screenshotWatchPaths.isEmpty()) {
+            screenshotWatchPaths.addAll(ScreenshotPathDetector.getDefaultPaths())
+        }
     }
 }
 

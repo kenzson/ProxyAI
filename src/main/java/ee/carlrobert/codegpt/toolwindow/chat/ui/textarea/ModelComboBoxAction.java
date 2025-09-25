@@ -30,6 +30,7 @@ import com.intellij.openapi.ui.popup.LightweightWindowEvent;
 import com.intellij.openapi.ui.popup.ListPopup;
 import ee.carlrobert.codegpt.Icons;
 import ee.carlrobert.codegpt.completions.llama.LlamaModel;
+import ee.carlrobert.codegpt.settings.models.ModelDetailsState;
 import ee.carlrobert.codegpt.settings.models.ModelRegistry;
 import ee.carlrobert.codegpt.settings.models.ModelSelection;
 import ee.carlrobert.codegpt.settings.models.ModelSettings;
@@ -40,7 +41,6 @@ import ee.carlrobert.codegpt.settings.service.ModelChangeNotifierAdapter;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.settings.service.custom.CustomServiceSettingsState;
 import ee.carlrobert.codegpt.settings.service.custom.CustomServicesSettings;
-import ee.carlrobert.codegpt.settings.service.google.GoogleSettings;
 import ee.carlrobert.codegpt.settings.service.llama.LlamaSettings;
 import ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings;
 import ee.carlrobert.codegpt.toolwindow.ui.CodeGPTModelsListPopupAction;
@@ -51,7 +51,6 @@ import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionModel;
 import java.awt.Color;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.function.Consumer;
 import javax.swing.Icon;
 import javax.swing.JComponent;
@@ -72,7 +71,8 @@ public class ModelComboBoxAction extends ComboBoxAction {
       Project project,
       Consumer<ServiceType> onModelChange,
       ServiceType selectedService) {
-    this(project, onModelChange, selectedService, Arrays.asList(ServiceType.values()), true, FeatureType.CHAT);
+    this(project, onModelChange, selectedService, Arrays.asList(ServiceType.values()), true,
+        FeatureType.CHAT);
   }
 
   public ModelComboBoxAction(
@@ -81,7 +81,8 @@ public class ModelComboBoxAction extends ComboBoxAction {
       ServiceType selectedProvider,
       List<ServiceType> availableProviders,
       boolean showConfigureModels) {
-    this(project, onModelChange, selectedProvider, availableProviders, showConfigureModels, FeatureType.CHAT);
+    this(project, onModelChange, selectedProvider, availableProviders, showConfigureModels,
+        FeatureType.CHAT);
   }
 
   public ModelComboBoxAction(
@@ -349,10 +350,19 @@ public class ModelComboBoxAction extends ComboBoxAction {
   }
 
   private String getGooglePresentationText() {
-    var model = ApplicationManager.getApplication().getService(GoogleSettings.class)
+    var chatModel = ApplicationManager.getApplication()
+        .getService(ModelSettings.class)
         .getState()
-        .getModel();
-    return ModelRegistry.getInstance().getModelDisplayName(GOOGLE, model);
+        .getModelSelection(featureType);
+    return ModelRegistry.getInstance().getModelDisplayName(GOOGLE, getGoogleModelCode(chatModel));
+  }
+
+  private String getGoogleModelCode(@Nullable ModelDetailsState chatModel) {
+    if (chatModel == null || chatModel.getModel() == null || chatModel.getModel().isBlank()) {
+      return ModelRegistry.GEMINI_PRO_2_5;
+    }
+
+    return chatModel.getModel();
   }
 
   private String getLlamaCppPresentationText() {
@@ -473,8 +483,11 @@ public class ModelComboBoxAction extends ComboBoxAction {
         modelName,
         Icons.Google,
         comboBoxPresentation,
-        () -> ApplicationManager.getApplication().getService(ModelSettings.class)
-            .setModel(featureType, model.getCode(), GOOGLE));
+        () -> {
+          var application = ApplicationManager.getApplication();
+          application.getService(ModelSettings.class)
+              .setModel(featureType, model.getCode(), GOOGLE);
+        });
   }
 
   private AnAction createAnthropicModelAction(
