@@ -34,6 +34,8 @@ import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
+import ee.carlrobert.codegpt.codecompletions.edit.NextEditCoordinator
+import ee.carlrobert.codegpt.telemetry.ui.preferences.TelemetryConfigurable
 import ee.carlrobert.service.NextEditResponse
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -128,10 +130,11 @@ class CodeSuggestionDiffViewer(
             popup.dispose()
 
             application.executeOnPooledThread {
-                grpcService?.getNextEdit(
+                NextEditCoordinator.requestNextEdit(
                     mainEditor,
                     mainEditor.document.text,
                     runReadAction { mainEditor.caretModel.offset },
+                    false
                 )
             }
         }
@@ -194,8 +197,8 @@ class CodeSuggestionDiffViewer(
                 )
 
                 if (popup.isVisible && !popup.isDisposed) {
-                    adjustPopupSize(popup, myEditor)
                     popup.setLocation(adjustedLocation)
+                    adjustPopupSize(popup, myEditor)
                 }
             }
         }
