@@ -1,5 +1,9 @@
 package ee.carlrobert.codegpt.completions;
 
+import static ee.carlrobert.codegpt.CodeGPTKeys.CODEGPT_USER_DETAILS;
+import static ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION;
+import static ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI;
+
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
 import com.intellij.openapi.diagnostic.Logger;
@@ -9,12 +13,14 @@ import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
+import ee.carlrobert.codegpt.util.ApplicationUtil;
+import ee.carlrobert.codegpt.util.file.FileUtil;
 import ee.carlrobert.llm.client.DeserializationUtil;
 import ee.carlrobert.llm.client.anthropic.completion.ClaudeCompletionRequest;
+import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest;
 import ee.carlrobert.llm.client.codegpt.request.InlineEditRequest;
 import ee.carlrobert.llm.client.codegpt.request.chat.ChatCompletionRequest;
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionRequest;
-import ee.carlrobert.llm.client.llama.completion.LlamaCompletionRequest;
 import ee.carlrobert.llm.client.openai.completion.OpenAIChatCompletionEventSourceListener;
 import ee.carlrobert.llm.client.openai.completion.OpenAITextCompletionEventSourceListener;
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest;
@@ -75,12 +81,13 @@ public final class CompletionRequestService {
   public EventSource autoApplyAsync(
       AutoApplyParameters params,
       CompletionEventListener<String> eventListener) {
-    var serviceType =
+    var selectedService =
         ModelSelectionService.getInstance().getServiceForFeature(FeatureType.AUTO_APPLY);
+
     var request = CompletionRequestFactory
-        .getFactory(serviceType)
+        .getFactory(selectedService)
         .createAutoApplyRequest(params);
-    return getChatCompletionAsync(request, eventListener, serviceType, FeatureType.AUTO_APPLY);
+    return getChatCompletionAsync(request, eventListener, selectedService, FeatureType.AUTO_APPLY);
   }
 
   public EventSource getCommitMessageAsync(
@@ -129,6 +136,10 @@ public final class CompletionRequestService {
             .getChatCompletionAsync(completionRequest, eventListener);
         case MISTRAL -> CompletionClientProvider.getMistralClient()
             .getChatCompletionAsync(completionRequest, eventListener);
+        case LLAMA_CPP -> CompletionClientProvider.getLlamaClient()
+            .getChatCompletionAsync(completionRequest, eventListener);
+        case INCEPTION -> CompletionClientProvider.getInceptionClient()
+            .getChatCompletionAsync(completionRequest, eventListener);
         default -> throw new RuntimeException("Unknown service selected");
       };
     }
@@ -150,11 +161,6 @@ public final class CompletionRequestService {
           ModelSelectionService.getInstance().getModelForFeature(featureType, null),
           eventListener);
     }
-    if (request instanceof LlamaCompletionRequest completionRequest) {
-      return CompletionClientProvider.getLlamaClient().getChatCompletionAsync(
-          completionRequest,
-          eventListener);
-    }
 
     throw new IllegalStateException("Unknown request type: " + request.getClass());
   }
@@ -168,6 +174,10 @@ public final class CompletionRequestService {
         case OLLAMA -> CompletionClientProvider.getOllamaClient()
             .getChatCompletion(completionRequest);
         case MISTRAL -> CompletionClientProvider.getMistralClient()
+            .getChatCompletion(completionRequest);
+        case LLAMA_CPP -> CompletionClientProvider.getLlamaClient()
+            .getChatCompletion(completionRequest);
+        case INCEPTION -> CompletionClientProvider.getInceptionClient()
             .getChatCompletion(completionRequest);
         default -> throw new RuntimeException("Unknown service selected");
       };
@@ -205,11 +215,6 @@ public final class CompletionRequestService {
           .getContent().getParts().get(0)
           .getText();
     }
-    if (request instanceof LlamaCompletionRequest completionRequest) {
-      return CompletionClientProvider.getLlamaClient()
-          .getChatCompletion(completionRequest)
-          .getContent();
-    }
 
     throw new IllegalStateException("Unknown request type: " + request.getClass());
   }
@@ -235,6 +240,8 @@ public final class CompletionRequestService {
       case GOOGLE -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.GoogleApiKey.INSTANCE);
       case MISTRAL ->
           CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.MistralApiKey.INSTANCE);
+      case INCEPTION ->
+          CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.InceptionApiKey.INSTANCE);
       case PROXYAI, CUSTOM_OPENAI, LLAMA_CPP, OLLAMA -> true;
     };
   }

@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.3-241.1] - 2025-10-08
+
+### Added
+
+- New Inception Labs provider (BYOK) supporting all the in-built features
+- Different set of specialized apply models for ProxyAI Cloud users (`mercury-coder`, `relace` and `morph`)
+
+### Replaced
+
+- ProxyAI Next Edit `zeta` model with `mercury-coder`
+
+### Fixed
+
+- Commit Message action from disappearing [#1134](https://github.com/carlrobertoh/ProxyAI/issues/1134)
+- Read access exception on GoLand [#1139](https://github.com/carlrobertoh/ProxyAI/issues/1139)
+
 ## [3.6.2-241.1] - 2025-10-03
 
 ### Fixed
@@ -1141,7 +1157,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.2-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.3-241.1...HEAD
+[3.6.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.2-241.1...v3.6.3-241.1
 [3.6.2-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.1-241.1...v3.6.2-241.1
 [3.6.1-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.0-241.1...v3.6.1-241.1
 [3.6.0-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.5.1-241.1...v3.6.0-241.1

@@ -51,7 +51,7 @@ object LegacySettingsMigration {
             setModelSelection(FeatureType.CODE_COMPLETION, codeModel, selectedService)
 
             if (selectedService == ServiceType.PROXYAI) {
-                setModelSelection(FeatureType.NEXT_EDIT, ModelRegistry.ZETA, ServiceType.PROXYAI)
+                setModelSelection(FeatureType.NEXT_EDIT, ModelRegistry.MERCURY_CODER, ServiceType.PROXYAI)
             } else {
                 setModelSelection(FeatureType.NEXT_EDIT, null, selectedService)
             }
@@ -104,6 +104,10 @@ object LegacySettingsMigration {
                 ServiceType.MISTRAL -> {
                     ModelRegistry.DEVSTRAL_MEDIUM_2507
                 }
+
+                ServiceType.INCEPTION -> {
+                    ModelRegistry.MERCURY_CODER
+                }
             }
         } catch (e: Exception) {
             logger.warn("Failed to get legacy chat model for $serviceType", e)
@@ -151,6 +155,10 @@ object LegacySettingsMigration {
 
                 ServiceType.MISTRAL -> {
                     ModelRegistry.CODESTRAL_LATEST
+                }
+
+                ServiceType.INCEPTION -> {
+                    ModelRegistry.MERCURY_CODER
                 }
             }
         } catch (e: Exception) {

@@ -56,6 +56,9 @@
         <applicationConfigurable id="settings.codegpt.services.ollama" parentId="settings.codegpt.services"
                                  displayName="Ollama (Offline)"
                                  instance="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettingsConfigurable"/>
+        <applicationConfigurable id="settings.codegpt.services.inception" parentId="settings.codegpt.services"
+                                 displayName="Inception Labs"
+                                 instance="ee.carlrobert.codegpt.settings.service.InceptionServiceConfigurable"/>
         <applicationConfigurable id="settings.codegpt.models" parentId="settings.codegpt" bundle="messages.codegpt"
                                  key="settings.models.displayName"
                                  instance="ee.carlrobert.codegpt.settings.models.ModelSettingsConfigurable"/>
@@ -87,6 +90,7 @@
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.mistral.MistralSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.llama.LlamaSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.ollama.OllamaSettings"/>
+        <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.service.inception.InceptionSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.models.ModelSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.IncludedFilesSettings"/>
         <applicationService serviceImplementation="ee.carlrobert.codegpt.settings.advanced.AdvancedSettings"/>
@@ -209,15 +213,15 @@
             <separator/>
         </group>
 
-        <!--
-          Removed add-to-group into deprecated/removed VCS groups for 2025.1+/Remote Dev.
-          The action remains available via "Find Action" to avoid startup errors in Thin Client.
-        -->
         <group id="CodeGPT.VcsLogContextMenu">
             <separator/>
             <action
-                    id="CodeGPT.ExplainGitCommitAction"
-                    class="ee.carlrobert.codegpt.actions.ExplainGitCommitAction"/>
+              id="CodeGPT.ExplainGitCommitAction"
+              class="ee.carlrobert.codegpt.actions.ExplainGitCommitAction"/>
+            <add-to-group
+              group-id="Vcs.Log.ContextMenu"
+              relative-to-action="Vcs.Log.CompareRevisions"
+              anchor="after"/>
             <separator/>
         </group>
 
@@ -346,7 +350,7 @@
                text="ProxyAI"
                popup="true"
                icon="ee.carlrobert.codegpt.Icons.DefaultSmall">
-            <!-- Removed add-to-group to Vcs.MessageActionGroup to prevent startup errors in 251.* -->
+            <add-to-group group-id="Vcs.MessageActionGroup" anchor="first"/>
             <action
                     id="CodeGPT.GenerateGitCommitMessage"
                     text="Generate Commit Message"

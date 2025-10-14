@@ -51,16 +51,16 @@ class ModelRegistryTest : IntegrationTest() {
         val result = modelRegistry.getDefaultModelForFeature(FeatureType.CODE_COMPLETION, PricingPlan.INDIVIDUAL)
 
         assertThat(result.provider).isEqualTo(ServiceType.PROXYAI)
-        assertThat(result.model).isEqualTo("qwen-2.5-32b-code")
-        assertThat(result.displayName).isEqualTo("Qwen 2.5 32B Code")
+        assertThat(result.model).isEqualTo("mercury-coder")
+        assertThat(result.displayName).isEqualTo("Mercury Coder")
     }
 
     fun `test getDefaultModelForFeature with next edit returns zeta model`() {
         val result = modelRegistry.getDefaultModelForFeature(FeatureType.NEXT_EDIT, PricingPlan.INDIVIDUAL)
 
         assertThat(result.provider).isEqualTo(ServiceType.PROXYAI)
-        assertThat(result.model).isEqualTo("zeta")
-        assertThat(result.displayName).isEqualTo("Zeta")
+        assertThat(result.model).isEqualTo("mercury-coder")
+        assertThat(result.displayName).isEqualTo("Mercury Coder")
     }
 
     fun `test getAllModelsForFeature with chat returns chat models only`() {
@@ -77,7 +77,7 @@ class ModelRegistryTest : IntegrationTest() {
     fun `test getAllModelsForFeature with code completion returns code models only`() {
         val result = modelRegistry.getAllModelsForFeature(FeatureType.CODE_COMPLETION)
 
-        assertThat(result).anyMatch { it.provider == ServiceType.PROXYAI && it.model == "qwen-2.5-32b-code" }
+        assertThat(result).anyMatch { it.provider == ServiceType.PROXYAI && it.model == "mercury-coder" }
         assertThat(result).anyMatch { it.provider == ServiceType.OPENAI && it.model == "gpt-3.5-turbo-instruct" }
         assertThat(result).anyMatch { it.provider == ServiceType.MISTRAL && it.model == "codestral-latest" }
         assertThat(result).noneMatch { it.provider == ServiceType.ANTHROPIC }
@@ -88,7 +88,7 @@ class ModelRegistryTest : IntegrationTest() {
         val result = modelRegistry.getAllModelsForFeature(FeatureType.NEXT_EDIT)
 
         assertThat(result.first().provider).isEqualTo(ServiceType.PROXYAI)
-        assertThat(result.first().model).isEqualTo("zeta")
+        assertThat(result.first().model).isEqualTo("mercury-coder")
     }
 
     fun `test getProvidersForFeature with chat returns all chat providers`() {
@@ -115,15 +115,16 @@ class ModelRegistryTest : IntegrationTest() {
             ServiceType.MISTRAL,
             ServiceType.OLLAMA,
             ServiceType.LLAMA_CPP,
-            ServiceType.CUSTOM_OPENAI
+            ServiceType.CUSTOM_OPENAI,
+            ServiceType.INCEPTION
         )
         assertThat(result).doesNotContain(ServiceType.ANTHROPIC, ServiceType.GOOGLE)
     }
 
-    fun `test getProvidersForFeature with next edit returns proxyai only`() {
+    fun `test getProvidersForFeature with next edit returns proxyai and inception`() {
         val result = modelRegistry.getProvidersForFeature(FeatureType.NEXT_EDIT)
 
-        assertThat(result).containsExactly(ServiceType.PROXYAI)
+        assertThat(result).containsExactlyInAnyOrder(ServiceType.PROXYAI, ServiceType.INCEPTION)
     }
 
     fun `test isFeatureSupportedByProvider with valid chat provider returns true`() {
