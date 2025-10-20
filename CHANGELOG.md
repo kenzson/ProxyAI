@@ -6,6 +6,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Performance issues caused by token calculation
+- PSI preview link theme issues
+- Updated code not restored when closing the 'Apply' view
+- Maintain a rolling list (up to 2) of unselected tags when switching between editors
+
 ## [3.6.4-241.1] - 2025-10-15
 
 ### Added
