@@ -86,7 +86,6 @@ class PromptTextField(
         document.putUserData(PROMPT_FIELD_KEY, this)
         setPlaceholder(CodeGPTBundle.get("toolwindow.chat.textArea.emptyText"))
 
-        putClientProperty(UIUtil.HIDE_EDITOR_FROM_DATA_CONTEXT_PROPERTY, true)
         installPasteHandler()
     }
 
