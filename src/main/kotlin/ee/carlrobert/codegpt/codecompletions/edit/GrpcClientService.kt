@@ -24,6 +24,7 @@ import ee.carlrobert.service.*
 import io.grpc.ManagedChannel
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
+import io.grpc.netty.shaded.io.netty.channel.ChannelOption
 import kotlinx.coroutines.channels.ProducerScope
 import java.util.concurrent.TimeUnit
 
@@ -53,7 +54,9 @@ class GrpcClientService(private val project: Project) : Disposable {
 
         val grpcRequest = createCodeCompletionGrpcRequest(request)
         codeCompletionObserver = CodeCompletionStreamObserver(channel, eventListener)
-        codeCompletionStub?.getCodeCompletion(grpcRequest, codeCompletionObserver)
+        codeCompletionStub
+            ?.withDeadlineAfter(300, TimeUnit.SECONDS)
+            ?.getCodeCompletion(grpcRequest, codeCompletionObserver)
     }
 
     fun getNextEdit(
@@ -72,7 +75,9 @@ class GrpcClientService(private val project: Project) : Disposable {
 
         val request = createNextEditGrpcRequest(editor, fileContent, caretOffset)
         nextEditStreamObserver = NextEditStreamObserver(editor, addToQueue) { dispose() }
-        nextEditStub?.nextEdit(request, nextEditStreamObserver)
+        nextEditStub
+            ?.withDeadlineAfter(300, TimeUnit.SECONDS)
+            ?.nextEdit(request, nextEditStreamObserver)
     }
 
     fun acceptEdit(responseId: UUID, acceptedEdit: String) {
@@ -161,6 +166,12 @@ class GrpcClientService(private val project: Project) : Disposable {
                 .trustManager(CertificateManager.getInstance().trustManager)
                 .build()
         )
+        .withOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
+        .keepAliveTime(30, TimeUnit.SECONDS)
+        .keepAliveTimeout(10, TimeUnit.SECONDS)
+        .keepAliveWithoutCalls(true)
+        .idleTimeout(5, TimeUnit.MINUTES)
+        .maxInboundMessageSize(32 * 1024 * 1024)
         .build()
 
     private fun ensureActiveChannel() {
