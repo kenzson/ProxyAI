@@ -6,6 +6,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.5-241.1] - 2025-10-22
+
+### Added
+
+- Configurable send shortcut [#1149](https://github.com/carlrobertoh/ProxyAI/issues/1149)
+- Middle-click to remove files from context [#1148](https://github.com/carlrobertoh/ProxyAI/issues/1148)
+- Code completion request handling for the `stop` parameter [#1125](https://github.com/carlrobertoh/ProxyAI/issues/1125)
+
+### Fixed
+
+- Performance issues caused by token calculation
+- PSI preview link theme issues
+- Updated code not restored when closing the 'Apply' view
+- Maintain a rolling list (up to 2) of unselected tags when switching between editors
+- Message deletion [#1147](https://github.com/carlrobertoh/ProxyAI/issues/1147)
+- Code blocks containing nested backticks [#1144](https://github.com/carlrobertoh/ProxyAI/issues/1144)
+- Backtick-formatted code overflowing and going out of view [#1145](https://github.com/carlrobertoh/ProxyAI/issues/1145)
+
 ## [3.6.4-241.1] - 2025-10-15
 
 ### Added
@@ -1163,7 +1181,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.4-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.5-241.1...HEAD
+[3.6.5-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.4-241.1...v3.6.5-241.1
 [3.6.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.3-241.1...v3.6.4-241.1
 [3.6.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.2-241.1...v3.6.3-241.1
 [3.6.2-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.1-241.1...v3.6.2-241.1

@@ -14,6 +14,7 @@ import com.intellij.ui.JBColor;
 import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
 import ee.carlrobert.codegpt.CodeGPTKeys;
+import ee.carlrobert.codegpt.EncodingManager;
 import ee.carlrobert.codegpt.ReferencedFile;
 import ee.carlrobert.codegpt.actions.ActionType;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
@@ -90,7 +91,7 @@ public class ChatToolWindowTabPanel implements Disposable {
     this.chatSession = new ChatSession();
     conversationService = ConversationService.getInstance();
     toolWindowScrollablePanel = new ChatToolWindowScrollablePanel();
-    tagManager = new TagManager(this);
+    tagManager = new TagManager();
     this.psiStructureRepository = new PsiStructureRepository(
         this,
         project,
@@ -290,10 +291,12 @@ public class ChatToolWindowTabPanel implements Disposable {
 
   public void includeFiles(List<VirtualFile> referencedFiles) {
     userInputPanel.includeFiles(referencedFiles);
-    ReadAction.nonBlocking(() ->
-            referencedFiles.stream()
-                .map(it -> ReferencedFile.from(it).fileContent())
-                .toList()
+    ReadAction.nonBlocking(() -> {
+              var encodingManager = EncodingManager.getInstance();
+              return referencedFiles.stream()
+                  .mapToInt(it -> encodingManager.countTokens(ReferencedFile.from(it).fileContent()))
+                  .sum();
+            }
         )
         .inSmartMode(project)
         .expireWith(project)

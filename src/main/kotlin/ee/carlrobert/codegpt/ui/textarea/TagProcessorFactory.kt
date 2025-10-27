@@ -4,6 +4,7 @@ import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
 import com.intellij.codeInsight.daemon.impl.HighlightInfo
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -21,6 +22,7 @@ import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.conversations.message.Message
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.HistoryActionItem
+import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.GitUtil
 import git4idea.GitCommit
 import java.util.*
@@ -30,7 +32,8 @@ object TagProcessorFactory {
     fun getProcessor(project: Project, tagDetails: TagDetails): TagProcessor {
         return when (tagDetails) {
             is FileTagDetails -> FileTagProcessor(tagDetails)
-            is SelectionTagDetails -> SelectionTagProcessor(tagDetails)
+            is SelectionTagDetails -> SelectionTagProcessor(project, tagDetails)
+            is EditorSelectionTagDetails -> EditorSelectionTagProcessor(project, tagDetails)
             is HistoryTagDetails -> ConversationTagProcessor(tagDetails)
             is DocumentationTagDetails -> DocumentationTagProcessor(tagDetails)
             is PersonaTagDetails -> PersonaTagProcessor(tagDetails)
@@ -38,7 +41,6 @@ object TagProcessorFactory {
             is WebTagDetails -> WebTagProcessor()
             is GitCommitTagDetails -> GitCommitTagProcessor(project, tagDetails)
             is CurrentGitChangesTagDetails -> CurrentGitChangesTagProcessor(project)
-            is EditorSelectionTagDetails -> EditorSelectionTagProcessor(tagDetails)
             is EditorTagDetails -> EditorTagProcessor(tagDetails)
             is ImageTagDetails -> ImageTagProcessor(tagDetails)
             is EmptyTagDetails -> TagProcessor { _, _ -> }
@@ -72,42 +74,34 @@ class EditorTagProcessor(
 }
 
 class SelectionTagProcessor(
+    private val project: Project,
     private val tagDetails: SelectionTagDetails,
 ) : TagProcessor {
 
     override fun process(message: Message, promptBuilder: StringBuilder) {
-        if (tagDetails.selectedText.isNullOrEmpty()) {
+        val selectedText = runReadAction { EditorUtil.getSelectedEditorSelectedText(project) }
+        if (selectedText.isNullOrEmpty()) {
             return
         }
 
         promptBuilder.append(
-            CompletionRequestUtil.formatCode(
-                tagDetails.selectedText ?: "",
-                tagDetails.virtualFile.path
-            )
+            CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)
         )
-
-        tagDetails.selectionModel.let {
-            if (runReadAction { it.hasSelection() }) {
-                it.removeSelection()
-            }
-        }
     }
 }
 
 class EditorSelectionTagProcessor(
+    private val project: Project,
     private val tagDetails: EditorSelectionTagDetails,
 ) : TagProcessor {
     override fun process(message: Message, promptBuilder: StringBuilder) {
-        if (tagDetails.selectedText.isNullOrEmpty()) {
+        val selectedText = runReadAction { EditorUtil.getSelectedEditorSelectedText(project) }
+        if (selectedText.isNullOrEmpty()) {
             return
         }
 
         promptBuilder.append(
-            CompletionRequestUtil.formatCode(
-                tagDetails.selectedText ?: "",
-                tagDetails.virtualFile.path
-            )
+            CompletionRequestUtil.formatCode(selectedText, tagDetails.virtualFile.path)
         )
     }
 }

@@ -17,7 +17,6 @@ import javax.swing.*
 
 abstract class TagPanel(
     var tagDetails: TagDetails,
-    private val tagManager: TagManager,
     private val shouldPreventDeselection: Boolean = true,
     protected val project: Project,
 ) : JToggleButton() {
@@ -88,14 +87,13 @@ abstract class TagPanel(
         label.inheritsPopupMenu = true
         closeButton.inheritsPopupMenu = true
 
-        label.addMouseListener(object : MouseAdapter() {
+        val mouseAdapter = object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) {
-                if (SwingUtilities.isLeftMouseButton(e)) {
-                    this@TagPanel.doClick()
-                    e.consume()
-                }
+                handleMousePress(e)
             }
-        })
+        }
+        label.addMouseListener(mouseAdapter)
+        addMouseListener(mouseAdapter)
 
         addActionListener {
             if (isRevertingSelection) return@addActionListener
@@ -110,12 +108,22 @@ abstract class TagPanel(
 
             closeButton.isVisible = tagDetails.isRemovable
             tagDetails.selected = isSelected
-            tagManager.notifySelectionChanged(tagDetails)
             label.update(isSelected)
         }
 
         revalidate()
         repaint()
+    }
+
+    private fun handleMousePress(e: MouseEvent) {
+        if (SwingUtilities.isLeftMouseButton(e)) {
+            this@TagPanel.doClick()
+            e.consume()
+        }
+        if (SwingUtilities.isMiddleMouseButton(e) && tagDetails.isRemovable) {
+            onClose()
+            e.consume()
+        }
     }
 
     private fun toProjectRelative(path: String): String? {
@@ -182,10 +190,9 @@ abstract class TagPanel(
 
 class SelectionTagPanel(
     tagDetails: EditorSelectionTagDetails,
-    tagManager: TagManager,
     private val promptTextField: PromptTextField,
     project: Project,
-) : TagPanel(tagDetails, tagManager, true, project) {
+) : TagPanel(tagDetails, true, project) {
 
     init {
         cursor = Cursor(Cursor.DEFAULT_CURSOR)

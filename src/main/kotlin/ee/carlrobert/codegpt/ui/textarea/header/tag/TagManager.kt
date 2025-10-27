@@ -1,30 +1,13 @@
 package ee.carlrobert.codegpt.ui.textarea.header.tag
 
-import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.components.service
+import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.vfs.VirtualFile
-import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
-import ee.carlrobert.codegpt.settings.configuration.ConfigurationStateListener
 import java.util.concurrent.CopyOnWriteArraySet
 
-class TagManager(parentDisposable: Disposable) {
+class TagManager {
 
     private val tags = mutableSetOf<TagDetails>()
     private val listeners = CopyOnWriteArraySet<TagManagerListener>()
-
-    init {
-        val connection = ApplicationManager.getApplication().messageBus
-            .connect(parentDisposable)
-
-        connection.subscribe(
-            ConfigurationStateListener.TOPIC,
-            ConfigurationStateListener { newState ->
-                if (!newState.chatCompletionSettings.editorContextTagEnabled) {
-                    clear()
-                }
-            })
-    }
 
     fun addListener(listener: TagManagerListener) {
         listeners.add(listener)
@@ -53,10 +36,6 @@ class TagManager(parentDisposable: Disposable) {
 
     fun addTag(tagDetails: TagDetails) {
         val wasAdded = synchronized(this) {
-            if (!service<ConfigurationSettings>().state.chatCompletionSettings.editorContextTagEnabled
-                && isEditorTag(tagDetails)
-            ) return
-
             if (tagDetails is EditorSelectionTagDetails) {
                 remove(tagDetails)
             }
@@ -72,10 +51,21 @@ class TagManager(parentDisposable: Disposable) {
         }
     }
 
-    fun notifySelectionChanged(tagDetails: TagDetails) {
+    fun updateSelectionTag(virtualFile: VirtualFile, selectionModel: SelectionModel) {
+        val selectionTag = tags.firstOrNull {
+            when (it) {
+                is SelectionTagDetails -> it.virtualFile == virtualFile
+                is EditorSelectionTagDetails -> it.virtualFile == virtualFile
+                else -> false
+            }
+        } ?: return
+        notifySelectionChanged(selectionTag, selectionModel)
+    }
+
+    fun notifySelectionChanged(tagDetails: TagDetails, selectionModel: SelectionModel) {
         val containsTag = synchronized(this) { tags.contains(tagDetails) }
         if (containsTag) {
-            listeners.forEach { it.onTagSelectionChanged(tagDetails) }
+            listeners.forEach { it.onTagSelectionChanged(tagDetails, selectionModel) }
         }
     }
 
