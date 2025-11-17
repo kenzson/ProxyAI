@@ -29,7 +29,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
 
   private static final Logger LOG = Logger.getInstance(
       ToolWindowCompletionResponseEventListener.class);
-  private static final int UPDATE_INTERVAL_MS = 8;
+  private static final int UPDATE_INTERVAL_MS = 20;
 
   private final Project project;
   private final StringBuilder messageBuilder = new StringBuilder();
@@ -73,7 +73,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
 
     try {
       messageBuilder.append(partialMessage);
-      var ongoingTokens = encodingManager.countTokens(messageBuilder.toString());
+      var ongoingTokens = encodingManager.countTokens(partialMessage);
       messageBuffer.offer(partialMessage);
       ApplicationManager.getApplication().invokeLater(() ->
           totalTokensPanel.update(totalTokensPanel.getTokenDetails().getTotal() + ongoingTokens)
@@ -163,6 +163,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
     responsePanel.enableAllActions(true);
     responseContainer.stopLoading();
     responseContainer.hideCaret();
+    responseContainer.finishThinking();
     CompletionProgressNotifier.update(project, false);
   }
 }

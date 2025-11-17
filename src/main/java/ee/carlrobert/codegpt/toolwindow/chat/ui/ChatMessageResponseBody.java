@@ -229,6 +229,15 @@ public class ChatMessageResponseBody extends JPanel {
     }
   }
 
+  public void finishThinking() {
+    ApplicationManager.getApplication().invokeLater(() -> {
+      var thoughtProcessPanel = getExistingThoughtProcessPanel();
+      if (thoughtProcessPanel != null && !thoughtProcessPanel.isFinished()) {
+        thoughtProcessPanel.setFinished();
+      }
+    });
+  }
+
   public void clear() {
     contentPanel.removeAll();
     streamOutputParser.clear();

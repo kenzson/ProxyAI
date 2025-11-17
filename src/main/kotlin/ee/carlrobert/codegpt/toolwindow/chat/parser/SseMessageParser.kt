@@ -236,17 +236,24 @@ class SseMessageParser : MessageParser {
         segments: MutableList<Segment>,
         state: ParserState.InThinking
     ): Boolean {
-        val thinkEndIdx = buffer.indexOf(THINK_END)
+        val currentBuffer = buffer.toString()
+        val combined = state.content + currentBuffer
+        val endIdxCombined = combined.indexOf(THINK_END)
 
-        return if (thinkEndIdx >= 0) {
-            val thinkingContent = state.content + buffer.substring(0, thinkEndIdx)
+        return if (endIdxCombined >= 0) {
+            val thinkingContent = combined.substring(0, endIdxCombined)
             segments.add(Thinking(thinkingContent))
-            consumeFromBuffer(thinkEndIdx + THINK_END.length)
+
+            val consumedFromBuffer = (endIdxCombined + THINK_END.length - state.content.length)
+                .coerceAtLeast(0)
+                .coerceAtMost(currentBuffer.length)
+            consumeFromBuffer(consumedFromBuffer)
+
             parserState = ParserState.Outside
             true
         } else {
             if (buffer.isNotEmpty()) {
-                val newContent = state.content + buffer.toString()
+                val newContent = state.content + currentBuffer
                 segments.add(Thinking(newContent))
                 buffer.clear()
                 parserState = ParserState.InThinking(newContent)

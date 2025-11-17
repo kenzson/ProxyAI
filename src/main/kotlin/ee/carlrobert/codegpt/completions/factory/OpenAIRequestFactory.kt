@@ -153,7 +153,7 @@ class OpenAIRequestFactory : BaseRequestFactory() {
                 val r = m.response?.trim().orEmpty()
                 if (r.isNotEmpty()) messages.add(OpenAIChatCompletionStandardMessage("assistant", r))
             }
-            messages.add(OpenAIChatCompletionStandardMessage("user", "Generate SEARCH and REPLACE blocks."))
+            messages.add(OpenAIChatCompletionStandardMessage("user", "Implement."))
             return messages
         }
 
@@ -317,15 +317,8 @@ class OpenAIRequestFactory : BaseRequestFactory() {
                     messages.add(OpenAIChatCompletionStandardMessage("user", prevMessage.prompt))
                 }
 
-                var response = prevMessage.response ?: ""
-                if (response.startsWith("<think>")) {
-                    response = response
-                        .replace("(?s)<think>.*?</think>".toRegex(), "")
-                        .trim { it <= ' ' }
-                }
-
                 messages.add(
-                    OpenAIChatCompletionStandardMessage("assistant", response)
+                    OpenAIChatCompletionStandardMessage("assistant", prevMessage.response ?: "")
                 )
             }
 
