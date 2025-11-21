@@ -3,7 +3,6 @@ package ee.carlrobert.codegpt.toolwindow.chat;
 import static com.intellij.openapi.ui.Messages.OK;
 
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import ee.carlrobert.codegpt.EncodingManager;
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
@@ -27,8 +26,6 @@ import javax.swing.Timer;
 abstract class ToolWindowCompletionResponseEventListener implements
     CompletionResponseEventListener {
 
-  private static final Logger LOG = Logger.getInstance(
-      ToolWindowCompletionResponseEventListener.class);
   private static final int UPDATE_INTERVAL_MS = 20;
 
   private final Project project;
@@ -36,7 +33,7 @@ abstract class ToolWindowCompletionResponseEventListener implements
   private final EncodingManager encodingManager;
   private final ResponseMessagePanel responsePanel;
   private final UserMessagePanel userMessagePanel;
-  private final ChatMessageResponseBody responseContainer;
+  private ChatMessageResponseBody responseContainer;
   private final TotalTokensPanel totalTokensPanel;
   private final UserInputPanel textArea;
 
@@ -55,12 +52,21 @@ abstract class ToolWindowCompletionResponseEventListener implements
     this.project = project;
     this.userMessagePanel = userMessagePanel;
     this.responsePanel = responsePanel;
-    this.responseContainer = (ChatMessageResponseBody) responsePanel.getContent();
     this.totalTokensPanel = totalTokensPanel;
     this.textArea = textArea;
   }
 
   public abstract void handleTokensExceededPolicyAccepted();
+
+  private ChatMessageResponseBody getResponseContainer() {
+    if (responseContainer == null && responsePanel != null) {
+      var content = responsePanel.getResponseComponent();
+      if (content instanceof ChatMessageResponseBody) {
+        responseContainer = (ChatMessageResponseBody) content;
+      }
+    }
+    return responseContainer;
+  }
 
   @Override
   public void handleRequestOpen() {
@@ -79,7 +85,10 @@ abstract class ToolWindowCompletionResponseEventListener implements
           totalTokensPanel.update(totalTokensPanel.getTokenDetails().getTotal() + ongoingTokens)
       );
     } catch (Exception e) {
-      responseContainer.displayError("Something went wrong.");
+      var container = getResponseContainer();
+      if (container != null) {
+        container.displayError("Something went wrong.");
+      }
       throw new RuntimeException("Error while updating the content", e);
     }
   }
@@ -89,9 +98,15 @@ abstract class ToolWindowCompletionResponseEventListener implements
     ApplicationManager.getApplication().invokeLater(() -> {
       try {
         if ("insufficient_quota".equals(error.getCode())) {
-          responseContainer.displayQuotaExceeded();
+          var container = getResponseContainer();
+          if (container != null) {
+            container.displayQuotaExceeded();
+          }
         } else {
-          responseContainer.displayError(error.getMessage());
+          var container = getResponseContainer();
+          if (container != null) {
+            container.displayError(error.getMessage());
+          }
         }
       } finally {
         stopStreaming(responseContainer);
@@ -118,13 +133,18 @@ abstract class ToolWindowCompletionResponseEventListener implements
 
   @Override
   public void handleCompleted(String fullMessage, ChatCompletionParameters callParameters) {
-    ConversationService.getInstance().saveMessage(fullMessage, callParameters);
+    if (fullMessage != null) {
+      ConversationService.getInstance().saveMessage(fullMessage, callParameters);
+    }
 
     ApplicationManager.getApplication().invokeLater(() -> {
       try {
         responsePanel.enableAllActions(true);
         if (!streamResponseReceived && !fullMessage.isEmpty()) {
-          responseContainer.withResponse(fullMessage);
+          var container = getResponseContainer();
+          if (container != null) {
+            container.withResponse(fullMessage);
+          }
         }
         totalTokensPanel.updateUserPromptTokens(textArea.getText());
         totalTokensPanel.updateConversationTokens(callParameters.getConversation());
@@ -136,7 +156,10 @@ abstract class ToolWindowCompletionResponseEventListener implements
 
   @Override
   public void handleCodeGPTEvent(CodeGPTEvent event) {
-    responseContainer.handleCodeGPTEvent(event);
+    var container = getResponseContainer();
+    if (container != null) {
+      container.handleCodeGPTEvent(event);
+    }
   }
 
   private void processBufferedMessages() {
@@ -153,7 +176,10 @@ abstract class ToolWindowCompletionResponseEventListener implements
       accumulatedMessage.append(message);
     }
 
-    responseContainer.updateMessage(accumulatedMessage.toString());
+    var container = getResponseContainer();
+    if (container != null) {
+      container.updateMessage(accumulatedMessage.toString());
+    }
   }
 
   private void stopStreaming(ChatMessageResponseBody responseContainer) {
@@ -161,9 +187,11 @@ abstract class ToolWindowCompletionResponseEventListener implements
     textArea.setSubmitEnabled(true);
     userMessagePanel.enableAllActions(true);
     responsePanel.enableAllActions(true);
-    responseContainer.stopLoading();
-    responseContainer.hideCaret();
-    responseContainer.finishThinking();
+    if (responseContainer != null) {
+      responseContainer.stopLoading();
+      responseContainer.hideCaret();
+      responseContainer.finishThinking();
+    }
     CompletionProgressNotifier.update(project, false);
   }
 }

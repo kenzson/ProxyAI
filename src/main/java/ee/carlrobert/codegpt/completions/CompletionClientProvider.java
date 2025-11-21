@@ -18,9 +18,11 @@ import ee.carlrobert.llm.client.llama.LlamaClient;
 import ee.carlrobert.llm.client.mistral.MistralClient;
 import ee.carlrobert.llm.client.ollama.OllamaClient;
 import ee.carlrobert.llm.client.openai.OpenAIClient;
+import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import javax.net.ssl.X509TrustManager;
 import com.intellij.openapi.diagnostic.Logger;
 import okhttp3.Credentials;
@@ -79,7 +81,8 @@ public class CompletionClientProvider {
   }
 
   public static MistralClient getMistralClient() {
-    return new MistralClient(getCredential(CredentialKey.MistralApiKey.INSTANCE), getDefaultClientBuilder());
+    return new MistralClient(getCredential(CredentialKey.MistralApiKey.INSTANCE),
+        getDefaultClientBuilder());
   }
 
   public static InceptionClient getInceptionClient() {

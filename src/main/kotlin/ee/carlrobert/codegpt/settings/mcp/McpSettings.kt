@@ -16,7 +16,7 @@ class McpSettingsState : BaseState() {
     init {
         servers.add(McpServerDetailsState().apply {
             id = 1L
-            name = "Everything Server"
+            name = "Test Server"
             command = "npx"
             arguments = mutableListOf("-y", "@modelcontextprotocol/server-everything")
         })
@@ -32,9 +32,25 @@ class McpSettingsState : BaseState() {
         })
         servers.add(McpServerDetailsState().apply {
             id = 3L
-            name = "Git Server"
+            name = "Git"
+            command = "uvx"
+            arguments = mutableListOf(
+                "mcp-server-git",
+                "--repository",
+                ApplicationUtil.findCurrentProject()?.basePath ?: "/"
+            )
+        })
+        servers.add(McpServerDetailsState().apply {
+            id = 4L
+            name = "Context7"
             command = "npx"
-            arguments = mutableListOf("-y", "@modelcontextprotocol/server-git")
+            arguments = mutableListOf("-y", "@upstash/context7-mcp")
+        })
+        servers.add(McpServerDetailsState().apply {
+            id = 5L
+            name = "ripgrep"
+            command = "npx"
+            arguments = mutableListOf("-y", "mcp-ripgrep@latest")
         })
     }
 }

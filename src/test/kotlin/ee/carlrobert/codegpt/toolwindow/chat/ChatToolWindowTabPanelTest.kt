@@ -4,6 +4,7 @@ import com.intellij.openapi.components.service
 import com.intellij.testFramework.LightVirtualFile
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.EncodingManager
+import ee.carlrobert.codegpt.completions.CompletionRequestUtil
 import ee.carlrobert.codegpt.completions.ConversationType
 import ee.carlrobert.codegpt.completions.HuggingFaceModel
 import ee.carlrobert.codegpt.completions.llama.PromptTemplate.LLAMA
@@ -98,21 +99,28 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         service<PromptsSettings>().state.personas.selectedPersona.instructions =
             "TEST_SYSTEM_PROMPT"
         val message = Message("TEST_MESSAGE")
-        message.referencedFilePaths =
-            listOf("TEST_FILE_PATH_1", "TEST_FILE_PATH_2", "TEST_FILE_PATH_3")
         val conversation = ConversationService.getInstance().startConversation(project)
         val panel = ChatToolWindowTabPanel(project, conversation)
-        panel.includeFiles(listOf(
-            LightVirtualFile("TEST_FILE_NAME_1", "TEST_FILE_CONTENT_1"),
-            LightVirtualFile("TEST_FILE_NAME_2", "TEST_FILE_CONTENT_2"),
-            LightVirtualFile("TEST_FILE_NAME_3", "TEST_FILE_CONTENT_3"),
-        ))
+        val vf1 = LightVirtualFile("TEST_FILE_NAME_1", "TEST_FILE_CONTENT_1")
+        val vf2 = LightVirtualFile("TEST_FILE_NAME_2", "TEST_FILE_CONTENT_2")
+        val vf3 = LightVirtualFile("TEST_FILE_NAME_3", "TEST_FILE_CONTENT_3")
+        panel.includeFiles(listOf(vf1, vf2, vf3))
         expectOpenAI(StreamHttpExchange { request: RequestEntity ->
             assertThat(request.uri.path).isEqualTo("/v1/chat/completions")
             assertThat(request.method).isEqualTo("POST")
             assertThat(request.headers[HttpHeaders.AUTHORIZATION]!![0]).isEqualTo("Bearer TEST_API_KEY")
             val guidelines = getResourceContent("/prompts/persona/psi-navigation-guidelines.txt")
-            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines"
+            val filesBlock = buildString {
+                append("\n\n<referenced_files>")
+                append("\n")
+                append(CompletionRequestUtil.formatCode("TEST_FILE_CONTENT_1", vf1.path))
+                append("\n")
+                append(CompletionRequestUtil.formatCode("TEST_FILE_CONTENT_2", vf2.path))
+                append("\n")
+                append(CompletionRequestUtil.formatCode("TEST_FILE_CONTENT_3", vf3.path))
+                append("\n</referenced_files>")
+            }
+            val expectedSystem = "TEST_SYSTEM_PROMPT\n$guidelines$filesBlock"
             assertThat(request.body)
                 .extracting(
                     "model",
@@ -122,28 +130,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                     "gpt-4o",
                     listOf(
                         mapOf("role" to "system", "content" to expectedSystem),
-                        mapOf(
-                            "role" to "user",
-                            "content" to """
-                            Use the following context to answer question at the end:
-
-                            ```/TEST_FILE_NAME_1:/TEST_FILE_NAME_1
-                            TEST_FILE_CONTENT_1
-                            ```
-                            
-                            
-                            ```/TEST_FILE_NAME_2:/TEST_FILE_NAME_2
-                            TEST_FILE_CONTENT_2
-                            ```
-                            
-                            
-                            ```/TEST_FILE_NAME_3:/TEST_FILE_NAME_3
-                            TEST_FILE_CONTENT_3
-                            ```
-                            
-                            
-                            Question: TEST_MESSAGE""".trimIndent()
-                        )
+                        mapOf("role" to "user", "content" to "TEST_MESSAGE")
                     )
                 )
             listOf(
@@ -184,12 +171,11 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
-            .extracting("id", "prompt", "response", "referencedFilePaths")
+            .extracting("id", "prompt", "response")
             .containsExactly(
                 message.id,
                 message.prompt,
-                message.response,
-                listOf("TEST_FILE_PATH_1", "TEST_FILE_PATH_2", "TEST_FILE_PATH_3")
+                message.response
             )
     }
 
@@ -282,11 +268,8 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
 
     fun testFixCompileErrorsWithOpenAIService() {
         useOpenAIService()
-        service<PromptsSettings>().state.personas.selectedPersona.instructions =
-            "TEST_SYSTEM_PROMPT"
+        service<PromptsSettings>().state.personas.selectedPersona.instructions = "TEST_SYSTEM_PROMPT"
         val message = Message("TEST_MESSAGE")
-        message.referencedFilePaths =
-            listOf("TEST_FILE_PATH_1", "TEST_FILE_PATH_2", "TEST_FILE_PATH_3")
         val conversation = ConversationService.getInstance().startConversation(project)
         val panel = ChatToolWindowTabPanel(project, conversation)
         panel.includeFiles(
@@ -314,25 +297,7 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
                         ),
                         mapOf(
                             "role" to "user",
-                            "content" to """
-                            Use the following context to answer question at the end:
-
-                            ```/TEST_FILE_NAME_1:/TEST_FILE_NAME_1
-                            TEST_FILE_CONTENT_1
-                            ```
-                            
-                            
-                            ```/TEST_FILE_NAME_2:/TEST_FILE_NAME_2
-                            TEST_FILE_CONTENT_2
-                            ```
-                            
-                            
-                            ```/TEST_FILE_NAME_3:/TEST_FILE_NAME_3
-                            TEST_FILE_CONTENT_3
-                            ```
-                            
-                            
-                            Question: TEST_MESSAGE""".trimIndent()
+                            "content" to "TEST_MESSAGE"
                         )
                     )
                 )
@@ -374,12 +339,11 @@ class ChatToolWindowTabPanelTest : IntegrationTest() {
         val messages = panel.conversation.messages
         assertThat(messages).hasSize(1)
         assertThat(messages[0])
-            .extracting("id", "prompt", "response", "referencedFilePaths")
+            .extracting("id", "prompt", "response")
             .containsExactly(
                 message.id,
                 message.prompt,
-                message.response,
-                listOf("TEST_FILE_PATH_1", "TEST_FILE_PATH_2", "TEST_FILE_PATH_3")
+                message.response
             )
     }
 

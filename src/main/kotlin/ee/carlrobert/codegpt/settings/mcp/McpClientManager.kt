@@ -81,7 +81,6 @@ class McpClientManager {
                 logger.info("Connection initialized successfully")
 
                 val toolsResult = try {
-                    logger.debug("Listing tools...")
                     mcpClient.listTools()
                 } catch (e: Exception) {
                     logger.debug("Failed to list tools: ${e.message}")
@@ -89,7 +88,6 @@ class McpClientManager {
                 }
 
                 val resourcesResult = try {
-                    logger.debug("Listing resources...")
                     mcpClient.listResources()
                 } catch (e: Exception) {
                     logger.debug("Failed to list resources: ${e.message}")

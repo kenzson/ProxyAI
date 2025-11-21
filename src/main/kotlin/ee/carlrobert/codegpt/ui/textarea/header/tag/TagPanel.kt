@@ -73,11 +73,17 @@ abstract class TagPanel(
 
     override fun getPreferredSize(): Dimension {
         val closeButtonWidth = if (closeButton.isVisible) closeButton.preferredSize.width else 0
+        val additionalWidth = getAdditionalWidth()
         return Dimension(
-            label.preferredSize.width + closeButtonWidth + insets.left + insets.right,
+            label.preferredSize.width + closeButtonWidth + additionalWidth + insets.left + insets.right,
             JBUI.scale(20)
         )
     }
+    
+    /**
+     * Override this method in subclasses to add additional width for custom components
+     */
+    protected open fun getAdditionalWidth(): Int = 0
 
     override fun paintComponent(g: Graphics) {
         super.paintComponent(g)
@@ -105,7 +111,7 @@ abstract class TagPanel(
         }
 
         add(label, gbc)
-        gbc.gridx = 1
+        gbc.gridx = 2
         add(closeButton, gbc)
 
         label.inheritsPopupMenu = true

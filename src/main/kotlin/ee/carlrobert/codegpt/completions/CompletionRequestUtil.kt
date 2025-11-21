@@ -55,10 +55,6 @@ object CompletionRequestUtil {
 
         val structureContext = psiStructure
             ?.map { structure: ClassStructure ->
-                formatCode(
-                    psiStructureSerializer.serialize(structure),
-                    structure.virtualFile.path
-                )
                 repeatableContext
                     .replace("{FILE_PATH}", structure.virtualFile.path)
                     .replace(
@@ -82,5 +78,44 @@ object CompletionRequestUtil {
                 append(structureContext.orEmpty())
             })
             .replace("{QUESTION}", userPrompt!!)
+    }
+
+    @JvmStatic
+    fun buildContextBlock(
+        referencedFiles: List<ReferencedFile>,
+        psiStructure: Set<ClassStructure>?,
+    ): String {
+        val includedFilesSettings = service<IncludedFilesSettings>().state
+        val repeatableContext = includedFilesSettings.repeatableContext
+
+        val files = referencedFiles.stream()
+            .map { item: ReferencedFile ->
+                formatCode(item.fileContent(), item.filePath())
+            }
+            .collect(Collectors.joining("\n\n"))
+
+        val structures = psiStructure
+            ?.map { structure: ClassStructure ->
+                repeatableContext
+                    .replace("{FILE_PATH}", structure.virtualFile.path)
+                    .replace(
+                        "{FILE_CONTENT}",
+                        formatCode(
+                            psiStructureSerializer.serialize(structure),
+                            structure.virtualFile.path
+                        )
+                    )
+            }
+            ?.ifNotEmpty {
+                joinToString(
+                    prefix = "\n\n" + PSI_STRUCTURE_TITLE + "\n\n",
+                    separator = "\n\n"
+                ) { it }
+            }
+
+        return buildString {
+            append(files)
+            append(structures.orEmpty())
+        }
     }
 }

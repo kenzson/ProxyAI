@@ -45,19 +45,20 @@ class McpConnectionTestResultDialog(
         result = newResult
         title = if (newResult.success) "Connection Test Successful" else "Connection Test Failed"
 
-        val newPanel = if (newResult.success) {
-            createSuccessPanel()
-        } else {
-            createErrorPanel()
-        }
-
         val contentPane = contentPanel
-        contentPane.removeAll()
-        contentPane.add(newPanel)
-        contentPane.revalidate()
-        contentPane.repaint()
+        if (contentPane != null) {
+            val newPanel = if (newResult.success) {
+                createSuccessPanel()
+            } else {
+                createErrorPanel()
+            }
 
-        pack()
+            contentPane.removeAll()
+            contentPane.add(newPanel)
+            contentPane.revalidate()
+            contentPane.repaint()
+            pack()
+        }
     }
 
     override fun createActions() = arrayOf(okAction)

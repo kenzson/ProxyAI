@@ -1,5 +1,6 @@
 package ee.carlrobert.codegpt.ui.textarea.header.tag
 
+import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.editor.SelectionModel
 import com.intellij.openapi.vfs.VirtualFile
 import java.util.concurrent.CopyOnWriteArraySet
@@ -76,6 +77,45 @@ class TagManager {
         }
     }
 
+    fun updateTag(oldTag: TagDetails, newTag: TagDetails) {
+        runInEdt {
+            performTagUpdate(oldTag, newTag)
+        }
+    }
+
+    private fun performTagUpdate(oldTag: TagDetails, newTag: TagDetails): Boolean {
+        synchronized(this) {
+            if (tags.remove(oldTag)) {
+                tags.add(newTag)
+
+                if (newTag is McpTagDetails) {
+                    var updatedInPlace = false
+                    listeners.forEach { listener ->
+                        if (listener is McpTagUpdateListener) {
+                            if (listener.updateMcpTagInPlace(newTag)) {
+                                updatedInPlace = true
+                            }
+                        }
+                    }
+
+                    if (updatedInPlace) {
+                        return true
+                    } else {
+                        listeners.forEach { it.onTagRemoved(oldTag) }
+                        listeners.forEach { it.onTagAdded(newTag) }
+                        return true
+                    }
+                } else {
+                    listeners.forEach { it.onTagRemoved(oldTag) }
+                    listeners.forEach { it.onTagAdded(newTag) }
+                    return true
+                }
+            } else {
+                return false
+            }
+        }
+    }
+
     fun clear() {
         val removedTags = mutableListOf<TagDetails>()
         synchronized(this) {
@@ -86,7 +126,8 @@ class TagManager {
             listeners.forEach { it.onTagRemoved(tag) }
         }
     }
+}
 
-    private fun isEditorTag(tagDetails: TagDetails): Boolean =
-        tagDetails is EditorSelectionTagDetails || tagDetails is EditorTagDetails
+interface McpTagUpdateListener {
+    fun updateMcpTagInPlace(tagDetails: McpTagDetails): Boolean
 }

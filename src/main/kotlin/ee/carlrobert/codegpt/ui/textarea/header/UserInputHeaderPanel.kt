@@ -53,7 +53,7 @@ class UserInputHeaderPanel(
     private val withRemovableSelectedEditorTag: Boolean,
     private val onApply: (() -> Unit)? = null,
     private val getMarkdownContent: (() -> String)? = null
-) : JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)), TagManagerListener {
+) : JPanel(WrapLayout(FlowLayout.LEFT, 4, 4)), TagManagerListener, McpTagUpdateListener {
 
     companion object {
         private const val INITIAL_VISIBLE_FILES = 2
@@ -131,6 +131,40 @@ class UserInputHeaderPanel(
 
     fun addTag(tagDetails: TagDetails) {
         tagManager.addTag(tagDetails)
+    }
+
+    override fun updateMcpTagInPlace(tagDetails: McpTagDetails): Boolean {
+        val mcpPanels = components.filterIsInstance<McpTagPanel>()
+        if (mcpPanels.isEmpty()) {
+            val indirectPanels = defaultHeaderTagsPanel.components.filterIsInstance<McpTagPanel>()
+            mcpPanels.plus(indirectPanels)
+        }
+
+        val existingPanel = mcpPanels.find { panel ->
+            val panelTag = panel.tagDetails as? McpTagDetails
+            panelTag?.serverId == tagDetails.serverId
+        }
+
+        return if (existingPanel != null) {
+            runInEdt {
+                existingPanel.updateMcpTag(tagDetails)
+            }
+
+            SwingUtilities.invokeLater {
+                invalidate()
+                revalidate()
+                repaint()
+
+                parent?.let {
+                    it.invalidate()
+                    it.revalidate()
+                    it.repaint()
+                }
+            }
+            true
+        } else {
+            false
+        }
     }
 
     override fun onTagAdded(tag: TagDetails) {
@@ -227,10 +261,10 @@ class UserInputHeaderPanel(
     }
 
     private fun createTagPanel(tagDetails: TagDetails) =
-        (if (tagDetails is EditorSelectionTagDetails) {
-            SelectionTagPanel(tagDetails, promptTextField, project)
-        } else {
-            object : TagPanel(tagDetails, false, project) {
+        (when (tagDetails) {
+            is EditorSelectionTagDetails -> SelectionTagPanel(tagDetails, promptTextField, project)
+            is McpTagDetails -> McpTagPanel(tagDetails, tagManager, promptTextField, project)
+            else -> object : TagPanel(tagDetails, false, project) {
 
                 init {
                     cursor = if (tagDetails is FileTagDetails)

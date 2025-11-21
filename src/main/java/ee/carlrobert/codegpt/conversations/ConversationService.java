@@ -6,9 +6,11 @@ import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.project.Project;
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters;
 import ee.carlrobert.codegpt.conversations.message.Message;
+import ee.carlrobert.llm.client.openai.completion.response.ToolCall;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.jetbrains.annotations.NotNull;
@@ -67,6 +69,27 @@ public final class ConversationService {
   public void saveMessage(@NotNull Conversation conversation, @NotNull Message message) {
     conversation.setUpdatedOn(LocalDateTime.now());
     conversation.addMessage(message);
+    saveConversation(conversation);
+  }
+
+  public void saveAssistantMessageWithToolCalls(@NotNull Conversation conversation, @NotNull Message message, List<ToolCall> toolCalls) {
+    if (toolCalls != null && !toolCalls.isEmpty()) {
+      for (ToolCall toolCall : toolCalls) {
+        message.addToolCall(toolCall);
+      }
+    }
+    conversation.setUpdatedOn(LocalDateTime.now());
+    saveConversation(conversation);
+  }
+
+  public void saveAssistantMessageWithToolCalls(ChatCompletionParameters callParameters, List<ToolCall> toolCalls) {
+    saveAssistantMessageWithToolCalls(callParameters.getConversation(), callParameters.getMessage(), toolCalls);
+  }
+
+  public void saveToolExecutionResults(@NotNull Conversation conversation, @NotNull Message message, Map<String, String> toolExecutionResults) {
+    if (toolExecutionResults != null && !toolExecutionResults.isEmpty()) {
+      toolExecutionResults.forEach(message::addToolCallResult);
+    }
     saveConversation(conversation);
   }
 

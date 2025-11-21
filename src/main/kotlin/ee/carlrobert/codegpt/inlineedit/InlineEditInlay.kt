@@ -671,7 +671,6 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
                 ensureProperSizing()
 
                 if (!userInputPanel.isVisible || !userInputPanel.isEnabled) {
-                    logger.warn("UserInputPanel is not visible or enabled - making it so")
                     userInputPanel.isVisible = true
                     userInputPanel.isEnabled = true
                 }
@@ -682,22 +681,12 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
                 }
 
                 val preferredComponent = userInputPanel.getPreferredFocusedComponent()
-                preferredComponent?.let { component ->
-                    component.requestFocusInWindow()
-                    logger.debug("Requesting focus on preferred component: ${component.javaClass.simpleName}")
-                }
+                preferredComponent?.requestFocusInWindow()
 
                 val hasFocus = userInputPanel.hasFocus()
                 val isFocusOwner = userInputPanel.isFocusOwner
-                val focusOwner =
-                    KeyboardFocusManager.getCurrentKeyboardFocusManager().focusOwner
-
-                logger.debug("Focus state - UserInputPanel hasFocus: $hasFocus, isFocusOwner: $isFocusOwner")
-                logger.debug("Current focus owner: ${focusOwner?.javaClass?.simpleName ?: "null"}")
-
                 if (!hasFocus && !isFocusOwner) {
                     Timer(100) {
-                        logger.debug("Retrying focus after 100ms")
                         userInputPanel.requestFocusInWindow()
                     }.apply {
                         isRepeats = false
@@ -713,14 +702,9 @@ class InlineEditInlay(private var editor: Editor) : Disposable {
     private fun ensureProperSizing() {
         try {
             val currentHeight = userInputPanel.height
-            val preferredHeight = userInputPanel.preferredSize.height
             val minHeight = 60
 
-            logger.debug("Current sizing - Height: $currentHeight, Preferred: $preferredHeight")
-
             if (currentHeight > 0 && currentHeight < minHeight) {
-                logger.debug("Adjusting minimum size to ensure visibility")
-
                 userInputPanel.minimumSize = Dimension(650, minHeight)
 
                 userInputPanel.revalidate()

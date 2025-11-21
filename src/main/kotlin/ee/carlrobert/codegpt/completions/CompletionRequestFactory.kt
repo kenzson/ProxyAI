@@ -72,6 +72,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         private const val DEFAULT_MAX_TOKENS = 4096
     }
 
+
     override fun createInlineEditQuestionRequest(parameters: ChatCompletionParameters): CompletionRequest {
         val systemPrompt = """
             You are an Inline Edit assistant for a single open file.

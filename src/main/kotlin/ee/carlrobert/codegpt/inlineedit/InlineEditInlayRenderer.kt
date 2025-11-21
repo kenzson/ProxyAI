@@ -513,7 +513,7 @@ class InlineEditInlayRenderer(
                         change.isAccepted = true
                         removeChangeVisuals(change)
                     } catch (e: Exception) {
-                        logger.debug("Error accepting change during bulk apply", e)
+                        logger.error("Error accepting change during bulk apply", e)
                     }
                 }
             }
@@ -583,7 +583,7 @@ class InlineEditInlayRenderer(
             try {
                 editor.markupModel.removeHighlighter(highlighter)
             } catch (e: Exception) {
-                logger.debug("Error removing highlighter during disposal", e)
+                logger.error("Error removing highlighter during disposal", e)
             }
         }
         allHighlighters.clear()
@@ -595,7 +595,7 @@ class InlineEditInlayRenderer(
                 change.additionInlay?.dispose()
                 change.buttonInlay?.dispose()
             } catch (e: Exception) {
-                logger.debug("Error disposing change inlays during disposal", e)
+                logger.error("Error disposing change inlays during disposal", e)
             }
         }
         changes.clear()
@@ -608,18 +608,14 @@ class InlineEditInlayRenderer(
                 ui.buttonInlay?.dispose()
                 ui.deletionHighlighter?.let { editor.markupModel.removeHighlighter(it) }
             } catch (e: Exception) {
-                logger.debug("Error disposing hunk UI during disposal", e)
+                logger.error("Error disposing hunk UI during disposal", e)
             }
         }
         hunkUIs.clear()
     }
 
     private fun disposeTopPanel() {
-        try {
-            topPanelDisposable?.dispose()
-        } catch (e: Exception) {
-            logger.debug("Error disposing top panel", e)
-        }
+        topPanelDisposable?.dispose()
         topPanelDisposable = null
     }
 }

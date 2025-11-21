@@ -5,11 +5,13 @@ import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.mcp.McpTool
 import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.util.file.FileUtil
+import ee.carlrobert.llm.client.openai.completion.response.ToolCall
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.*
@@ -27,9 +29,14 @@ class ChatCompletionParameters private constructor(
     var referencedFiles: List<ReferencedFile>?,
     var personaDetails: PersonaDetails?,
     var psiStructure: Set<ClassStructure>?,
+    var mcpAttachedServerIds: List<String>?,
+    var mcpTools: List<McpTool>?,
+    var toolApprovalMode: ToolApprovalMode,
+    var toolResults: List<Pair<ToolCall, String>>? = null,
     var project: Project?,
     var chatMode: ChatMode = ChatMode.ASK,
-    var featureType: FeatureType = FeatureType.CHAT
+    var featureType: FeatureType = FeatureType.CHAT,
+    var requestType: RequestType = RequestType.NORMAL_REQUEST
 ) : CompletionParameters {
 
     fun toBuilder(): Builder {
@@ -41,9 +48,14 @@ class ChatCompletionParameters private constructor(
             referencedFiles(this@ChatCompletionParameters.referencedFiles)
             personaDetails(this@ChatCompletionParameters.personaDetails)
             psiStructure(this@ChatCompletionParameters.psiStructure)
+            mcpAttachedServerIds(this@ChatCompletionParameters.mcpAttachedServerIds)
+            mcpTools(this@ChatCompletionParameters.mcpTools)
+            toolApprovalMode(this@ChatCompletionParameters.toolApprovalMode)
+            toolResults(this@ChatCompletionParameters.toolResults)
             project(this@ChatCompletionParameters.project)
             chatMode(this@ChatCompletionParameters.chatMode)
             featureType(this@ChatCompletionParameters.featureType)
+            requestType(this@ChatCompletionParameters.requestType)
         }
     }
 
@@ -57,9 +69,14 @@ class ChatCompletionParameters private constructor(
         private var personaDetails: PersonaDetails? = null
         private var psiStructure: Set<ClassStructure>? = null
         private var gitDiff: String = ""
+        private var mcpAttachedServerIds: List<String>? = null
+        private var mcpTools: List<McpTool>? = null
+        private var toolApprovalMode: ToolApprovalMode = ToolApprovalMode.AUTO_APPROVE
+        private var toolResults: List<Pair<ToolCall, String>>? = null
         private var project: Project? = null
         private var chatMode: ChatMode = ChatMode.ASK
         private var featureType: FeatureType = FeatureType.CHAT
+        private var requestType: RequestType = RequestType.NORMAL_REQUEST
 
         fun sessionId(sessionId: UUID?) = apply { this.sessionId = sessionId }
         fun conversationType(conversationType: ConversationType) =
@@ -83,15 +100,27 @@ class ChatCompletionParameters private constructor(
         fun referencedFiles(referencedFiles: List<ReferencedFile>?) =
             apply { this.referencedFiles = referencedFiles }
 
-        fun personaDetails(personaDetails: PersonaDetails?) = apply { this.personaDetails = personaDetails }
+        fun personaDetails(personaDetails: PersonaDetails?) =
+            apply { this.personaDetails = personaDetails }
 
-        fun psiStructure(psiStructure: Set<ClassStructure>?) = apply { this.psiStructure = psiStructure }
+        fun psiStructure(psiStructure: Set<ClassStructure>?) =
+            apply { this.psiStructure = psiStructure }
+
+        fun mcpAttachedServerIds(serverIds: List<String>?) =
+            apply { this.mcpAttachedServerIds = serverIds }
+
+        fun mcpTools(tools: List<McpTool>?) = apply { this.mcpTools = tools }
+        fun toolApprovalMode(mode: ToolApprovalMode) = apply { this.toolApprovalMode = mode }
+        fun toolResults(results: List<Pair<ToolCall, String>>?) =
+            apply { this.toolResults = results }
 
         fun project(project: Project?) = apply { this.project = project }
 
         fun chatMode(chatMode: ChatMode) = apply { this.chatMode = chatMode }
 
         fun featureType(featureType: FeatureType) = apply { this.featureType = featureType }
+
+        fun requestType(requestType: RequestType) = apply { this.requestType = requestType }
 
         fun build(): ChatCompletionParameters {
             return ChatCompletionParameters(
@@ -105,9 +134,14 @@ class ChatCompletionParameters private constructor(
                 referencedFiles,
                 personaDetails,
                 psiStructure,
+                mcpAttachedServerIds,
+                mcpTools,
+                toolApprovalMode,
+                toolResults,
                 project,
                 chatMode,
-                featureType
+                featureType,
+                requestType
             )
         }
     }
@@ -129,8 +163,14 @@ data class LookupCompletionParameters(
     val featureType: FeatureType = FeatureType.LOOKUP
 ) : CompletionParameters
 
+enum class RequestType {
+    NORMAL_REQUEST,
+    TOOL_CALL_REQUEST,
+    TOOL_CALL_CONTINUATION
+}
+
 data class AutoApplyParameters(
-    val source: String, 
+    val source: String,
     val destination: VirtualFile,
     val chatMode: ChatMode = ChatMode.ASK,
     val featureType: FeatureType = FeatureType.AUTO_APPLY

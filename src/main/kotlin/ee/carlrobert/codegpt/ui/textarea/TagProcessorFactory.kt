@@ -4,7 +4,6 @@ import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerImpl
 import com.intellij.codeInsight.daemon.impl.HighlightInfo
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.application.readAction
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -20,6 +19,8 @@ import ee.carlrobert.codegpt.completions.CompletionRequestUtil
 import ee.carlrobert.codegpt.conversations.Conversation
 import ee.carlrobert.codegpt.conversations.ConversationsState
 import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.mcp.ConnectionStatus
+import ee.carlrobert.codegpt.mcp.McpSessionManager
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.HistoryActionItem
 import ee.carlrobert.codegpt.util.EditorUtil
@@ -39,6 +40,7 @@ object TagProcessorFactory {
             is PersonaTagDetails -> PersonaTagProcessor(tagDetails)
             is FolderTagDetails -> FolderTagProcessor(tagDetails)
             is WebTagDetails -> WebTagProcessor()
+            is McpTagDetails -> McpTagProcessor(project, tagDetails)
             is GitCommitTagDetails -> GitCommitTagProcessor(project, tagDetails)
             is CurrentGitChangesTagDetails -> CurrentGitChangesTagProcessor(project)
             is EditorTagDetails -> EditorTagProcessor(tagDetails)
@@ -209,6 +211,16 @@ class CurrentGitChangesTagProcessor(
     }
 }
 
+class McpTagProcessor(
+    private val project: Project,
+    private val tagDetails: McpTagDetails,
+) : TagProcessor {
+
+    override fun process(message: Message, promptBuilder: StringBuilder) {
+        // TODO
+    }
+}
+
 class ImageTagProcessor(
     private val tagDetails: ImageTagDetails
 ) : TagProcessor {
@@ -281,80 +293,82 @@ class DiagnosticsTagProcessor(
                         val psiFile = psiManager.findFile(virtualFile)
                             ?: return@runReadActionInSmartMode "No PSI file found for: ${virtualFile.path}"
 
-                val rangeHighlights =
-                    DaemonCodeAnalyzerImpl.getHighlights(
-                        document,
-                        HighlightSeverity.WEAK_WARNING,
-                        project
-                    )
-                // TODO: Find a better solution
-                val fileLevel: List<HighlightInfo> = try {
-                    val method = DaemonCodeAnalyzerImpl::class.java.methods.firstOrNull {
-                        it.name == "getFileLevelHighlights" && it.parameterCount == 2
-                    }
-                    if (method != null) {
-                        @Suppress("UNCHECKED_CAST")
-                        method.invoke(null, project, psiFile) as? List<HighlightInfo> ?: emptyList()
-                    } else {
-                        emptyList()
-                    }
-                } catch (_: Throwable) {
-                    emptyList()
-                }
-
-                val highlights = (rangeHighlights.asSequence() + fileLevel.asSequence())
-                    .distinctBy { Triple(it.description, it.startOffset, it.severity) }
-                    .sortedWith(
-                        compareBy<HighlightInfo>(
-                            { severityOrder(it.severity) },
-                            { it.startOffset.coerceAtLeast(0) }
-                        )
-                    )
-                    .toList()
-
-                if (highlights.isEmpty()) {
-                    return@runReadActionInSmartMode ""
-                }
-
-                val maxItems = 200
-                val overflow = (highlights.size - maxItems).coerceAtLeast(0)
-                val shown = highlights.take(maxItems)
-
-                buildString {
-                    append("File: ${virtualFile.name}\n")
-                    append("Path: ${virtualFile.path}\n\n")
-
-                    shown.forEach { info ->
-                        val startOffset = info.startOffset.coerceIn(0, document.textLength)
-                        val lineColText =
-                            if (info.startOffset >= 0 && document.textLength > 0) {
-                                val line = document.getLineNumber(startOffset) + 1
-                                val col = startOffset - document.getLineStartOffset(line - 1) + 1
-                                "line $line, col $col"
-                            } else {
-                                "file-level"
+                        val rangeHighlights =
+                            DaemonCodeAnalyzerImpl.getHighlights(
+                                document,
+                                HighlightSeverity.WEAK_WARNING,
+                                project
+                            )
+                        // TODO: Find a better solution
+                        val fileLevel: List<HighlightInfo> = try {
+                            val method = DaemonCodeAnalyzerImpl::class.java.methods.firstOrNull {
+                                it.name == "getFileLevelHighlights" && it.parameterCount == 2
                             }
-
-                        val rawMessage = info.description ?: info.toolTip ?: ""
-                        val message = StringUtil.removeHtmlTags(rawMessage, false).trim()
-
-                        val severityLabel = when (info.severity) {
-                            HighlightSeverity.ERROR -> "ERROR"
-                            HighlightSeverity.WARNING -> "WARNING"
-                            HighlightSeverity.WEAK_WARNING -> "WEAK_WARNING"
-                            HighlightSeverity.INFORMATION -> "INFO"
-                            else -> info.severity.toString()
+                            if (method != null) {
+                                @Suppress("UNCHECKED_CAST")
+                                method.invoke(null, project, psiFile) as? List<HighlightInfo>
+                                    ?: emptyList()
+                            } else {
+                                emptyList()
+                            }
+                        } catch (_: Throwable) {
+                            emptyList()
                         }
 
-                        append("- [$severityLabel] $lineColText: $message\n")
-                    }
+                        val highlights = (rangeHighlights.asSequence() + fileLevel.asSequence())
+                            .distinctBy { Triple(it.description, it.startOffset, it.severity) }
+                            .sortedWith(
+                                compareBy<HighlightInfo>(
+                                    { severityOrder(it.severity) },
+                                    { it.startOffset.coerceAtLeast(0) }
+                                )
+                            )
+                            .toList()
 
-                    if (overflow > 0) {
-                        append("... ($overflow more not shown)\n")
+                        if (highlights.isEmpty()) {
+                            return@runReadActionInSmartMode ""
+                        }
+
+                        val maxItems = 200
+                        val overflow = (highlights.size - maxItems).coerceAtLeast(0)
+                        val shown = highlights.take(maxItems)
+
+                        buildString {
+                            append("File: ${virtualFile.name}\n")
+                            append("Path: ${virtualFile.path}\n\n")
+
+                            shown.forEach { info ->
+                                val startOffset = info.startOffset.coerceIn(0, document.textLength)
+                                val lineColText =
+                                    if (info.startOffset >= 0 && document.textLength > 0) {
+                                        val line = document.getLineNumber(startOffset) + 1
+                                        val col =
+                                            startOffset - document.getLineStartOffset(line - 1) + 1
+                                        "line $line, col $col"
+                                    } else {
+                                        "file-level"
+                                    }
+
+                                val rawMessage = info.description ?: info.toolTip ?: ""
+                                val message = StringUtil.removeHtmlTags(rawMessage, false).trim()
+
+                                val severityLabel = when (info.severity) {
+                                    HighlightSeverity.ERROR -> "ERROR"
+                                    HighlightSeverity.WARNING -> "WARNING"
+                                    HighlightSeverity.WEAK_WARNING -> "WEAK_WARNING"
+                                    HighlightSeverity.INFORMATION -> "INFO"
+                                    else -> info.severity.toString()
+                                }
+
+                                append("- [$severityLabel] $lineColText: $message\n")
+                            }
+
+                            if (overflow > 0) {
+                                append("... ($overflow more not shown)\n")
+                            }
+                        }
                     }
                 }
-            }
-        }
             }
             result
         } catch (e: Exception) {

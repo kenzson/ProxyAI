@@ -20,11 +20,7 @@ import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
 import com.intellij.openapi.editor.ex.EditorEx
-import com.intellij.openapi.editor.markup.EffectType
-import com.intellij.openapi.editor.markup.HighlighterLayer
-import com.intellij.openapi.editor.markup.HighlighterTargetArea
-import com.intellij.openapi.editor.markup.RangeHighlighter
-import com.intellij.openapi.editor.markup.TextAttributes
+import com.intellij.openapi.editor.markup.*
 import com.intellij.openapi.fileTypes.FileTypes
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.project.Project
@@ -35,7 +31,6 @@ import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.ui.EditorTextField
 import com.intellij.ui.JBColor
 import com.intellij.util.ui.JBUI
-import com.intellij.util.ui.UIUtil
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.CodeGPTKeys.IS_PROMPT_TEXT_FIELD_DOCUMENT
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -63,7 +58,7 @@ class PromptTextField(
     private val onLookupAdded: (LookupActionItem) -> Unit,
     private val onSubmit: (String) -> Unit,
     private val onFilesDropped: (List<VirtualFile>) -> Unit = {},
-    featureType: FeatureType? = null
+    featureType: FeatureType? = null,
 ) : EditorTextField(project, FileTypes.PLAIN_TEXT), Disposable {
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())

@@ -4,7 +4,10 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import ee.carlrobert.codegpt.ui.DocumentationDetails;
+import ee.carlrobert.llm.client.openai.completion.response.ToolCall;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import org.jetbrains.annotations.Nullable;
@@ -21,6 +24,8 @@ public class Message {
   private boolean webSearchIncluded;
   private DocumentationDetails documentationDetails;
   private String personaName;
+  private List<ToolCall> toolCalls;
+  private Map<String, String> toolCallResults;
 
   public Message() {
     this.id = UUID.randomUUID();
@@ -103,6 +108,44 @@ public class Message {
 
   public void setPersonaName(String personaName) {
     this.personaName = personaName;
+  }
+
+  @JsonProperty("tool_calls")
+  public @Nullable List<ToolCall> getToolCalls() {
+    return toolCalls;
+  }
+
+  @JsonProperty("tool_calls")
+  public void setToolCalls(@Nullable List<ToolCall> toolCalls) {
+    this.toolCalls = toolCalls;
+  }
+
+  public void addToolCall(ToolCall toolCall) {
+    if (toolCalls == null) {
+      toolCalls = new java.util.ArrayList<>();
+    }
+    toolCalls.add(toolCall);
+  }
+
+  public boolean hasToolCalls() {
+    return toolCalls != null && !toolCalls.isEmpty();
+  }
+
+  @JsonProperty("tool_call_results")
+  public @Nullable Map<String, String> getToolCallResults() {
+    return toolCallResults;
+  }
+
+  @JsonProperty("tool_call_results")
+  public void setToolCallResults(@Nullable Map<String, String> toolCallResults) {
+    this.toolCallResults = toolCallResults;
+  }
+
+  public void addToolCallResult(String toolCallId, String executionOutput) {
+    if (toolCallResults == null) {
+      toolCallResults = new HashMap<>();
+    }
+    toolCallResults.put(toolCallId, executionOutput);
   }
 
   @Override

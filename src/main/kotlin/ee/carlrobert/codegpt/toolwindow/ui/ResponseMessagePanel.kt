@@ -4,9 +4,17 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.util.ui.JBFont
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
+import ee.carlrobert.codegpt.toolwindow.chat.ui.ChatMessageResponseBody
+import java.awt.BorderLayout
+import javax.swing.JComponent
+import javax.swing.JPanel
 import javax.swing.SwingConstants
 
 open class ResponseMessagePanel : BaseMessagePanel() {
+
+    private val originalContent = JPanel(BorderLayout()).apply {
+        isOpaque = false
+    }
 
     override fun createDisplayNameLabel(): JBLabel {
         return JBLabel(
@@ -19,5 +27,28 @@ open class ResponseMessagePanel : BaseMessagePanel() {
             .apply {
                 iconTextGap = 6
             }
+    }
+
+    init {
+        addContent(createContentWrapper())
+    }
+
+    private fun createContentWrapper(): JPanel {
+        return JPanel(BorderLayout()).apply {
+            isOpaque = false
+            add(originalContent, BorderLayout.CENTER)
+        }
+    }
+
+    fun setResponseContent(content: JComponent) {
+        originalContent.removeAll()
+        originalContent.add(content, BorderLayout.CENTER)
+        originalContent.revalidate()
+        originalContent.repaint()
+    }
+
+    fun getResponseComponent(): ChatMessageResponseBody? {
+        return originalContent.components
+            .firstOrNull { it is ChatMessageResponseBody } as? ChatMessageResponseBody
     }
 }

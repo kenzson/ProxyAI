@@ -394,7 +394,7 @@ class ModelRegistry {
             ModelSelection(
                 ServiceType.PROXYAI,
                 GEMINI_PRO_2_5,
-                "Gemini 2.5 Pro",
+                "Gemini 3.0 Pro Preview",
                 Icons.Google,
                 PricingPlan.INDIVIDUAL
             ),

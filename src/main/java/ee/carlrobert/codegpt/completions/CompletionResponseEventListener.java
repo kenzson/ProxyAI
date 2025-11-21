@@ -4,6 +4,7 @@ import ee.carlrobert.codegpt.conversations.Conversation;
 import ee.carlrobert.codegpt.conversations.message.Message;
 import ee.carlrobert.codegpt.events.CodeGPTEvent;
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
+import javax.swing.JPanel;
 
 public interface CompletionResponseEventListener {
 

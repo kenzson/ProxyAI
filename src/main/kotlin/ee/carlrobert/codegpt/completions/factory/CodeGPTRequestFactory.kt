@@ -5,11 +5,15 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import ee.carlrobert.codegpt.CodeGPTPlugin
+import ee.carlrobert.codegpt.ReferencedFile
 import ee.carlrobert.codegpt.completions.BaseRequestFactory
 import ee.carlrobert.codegpt.completions.ChatCompletionParameters
 import ee.carlrobert.codegpt.completions.InlineEditCompletionParameters
+import ee.carlrobert.codegpt.completions.ToolApprovalMode
 import ee.carlrobert.codegpt.completions.factory.OpenAIRequestFactory.Companion.buildOpenAIMessages
+import ee.carlrobert.codegpt.mcp.McpToolConverter
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
+import ee.carlrobert.codegpt.psistructure.models.ClassStructure
 import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
@@ -19,7 +23,7 @@ import ee.carlrobert.codegpt.ui.textarea.ConversationTagProcessor
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.client.codegpt.request.InlineEditRequest
 import ee.carlrobert.llm.client.codegpt.request.chat.*
-import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
+import ee.carlrobert.llm.client.openai.completion.request.*
 import ee.carlrobert.llm.completion.CompletionRequest
 
 class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructureSerializer) :
@@ -29,13 +33,14 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
         val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.CHAT)
 
         val configuration = service<ConfigurationSettings>().state
+        val messages = buildCodeGPTMessages(model, params, emptyList(), null)
         val requestBuilder: ChatCompletionRequest.Builder =
-            ChatCompletionRequest.Builder(
-                buildOpenAIMessages(model, params, emptyList(), emptyList())
-            )
+            ChatCompletionRequest.Builder(messages)
                 .setModel(model)
                 .setSessionId(params.sessionId)
                 .setStream(true)
+                .setTools(params.mcpTools?.map { McpToolConverter.convertToOpenAITool(it) }
+                    ?: emptyList())
                 .setMetadata(
                     Metadata(
                         CodeGPTPlugin.getVersion(),
@@ -84,12 +89,36 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
             )
         }.orEmpty()
 
+        val contextFilesWithPsi = contextFiles + psiContext
+
+        if (!params.mcpTools.isNullOrEmpty() && params.toolApprovalMode != ToolApprovalMode.BLOCK_ALL) {
+            val codegptTools = params.mcpTools!!.map { mcpTool ->
+                Tool().apply {
+                    function = ToolFunction().apply {
+                        name = mcpTool.name
+                        description = mcpTool.description
+                        parameters = convertMcpSchemaToCodeGPTParameters(mcpTool.schema)
+                    }
+                }
+            }
+            requestBuilder.setTools(codegptTools)
+
+            val toolChoice = when (params.toolApprovalMode) {
+                ToolApprovalMode.AUTO_APPROVE -> "auto"
+                ToolApprovalMode.REQUIRE_APPROVAL -> "require_approval"
+                else -> null
+            }
+            if (toolChoice != null) {
+                requestBuilder.setToolChoice(toolChoice)
+            }
+        }
+
         val conversationsHistory = params.history?.joinToString("\n\n") {
             ConversationTagProcessor.formatConversation(it)
         }
         requestBuilder.setContext(
             AdditionalRequestContext(
-                contextFiles + psiContext,
+                contextFilesWithPsi,
                 conversationsHistory
             )
         )
@@ -216,5 +245,85 @@ class CodeGPTRequestFactory(private val classStructureSerializer: ClassStructure
             .setStream(stream)
             .setTemperature(null)
             .build()
+    }
+
+    private fun convertMcpSchemaToCodeGPTParameters(mcpSchema: Map<String, Any>): ToolFunctionParameters {
+        return ToolFunctionParameters().apply {
+            if (mcpSchema.containsKey("type")) {
+                type = mcpSchema["type"] as? String ?: "object"
+                properties = mcpSchema["properties"] as? Map<String, Any> ?: mcpSchema
+                required = mcpSchema["required"] as? List<String> ?: emptyList()
+            } else {
+                type = "object"
+                properties = mcpSchema
+                required = mcpSchema.keys.toList()
+            }
+        }
+    }
+
+    private fun buildCodeGPTMessages(
+        model: String?,
+        params: ChatCompletionParameters,
+        referencedFiles: List<ReferencedFile>?,
+        psiStructure: Set<ClassStructure>?
+    ): List<OpenAIChatCompletionMessage> {
+        val messages =
+            buildOpenAIMessages(model, params, referencedFiles, emptyList(), psiStructure)
+
+        /*if (params.toolResults.isNullOrEmpty()) {
+            return messages
+        }
+
+        val convertedMessages = mutableListOf<OpenAIChatCompletionMessage>()
+        var pendingToolResults = mutableListOf<Pair<String, String>>()
+
+        for (message in messages) {
+            when (message) {
+                is OpenAIChatCompletionToolMessage -> {
+                    val callId = message.callId ?: ""
+                    val content = message.content ?: ""
+                    pendingToolResults.add(Pair(callId, content))
+                }
+
+                is OpenAIChatCompletionAssistantMessage -> {
+                    if (!message.toolCalls.isNullOrEmpty() && pendingToolResults.isNotEmpty()) {
+                        val toolCallsInfo = message.toolCalls.joinToString("\n") { toolCall ->
+                            val result = pendingToolResults.find { it.first == toolCall.id }?.second
+                                ?: "No result"
+                            "Tool ${toolCall.function.name} (${toolCall.id}): $result"
+                        }
+                        val newContent = if (message.content.isNullOrEmpty()) {
+                            "Tool execution results:\n$toolCallsInfo"
+                        } else {
+                            "${message.content}\n\nTool execution results:\n$toolCallsInfo"
+                        }
+                        convertedMessages.add(
+                            OpenAIChatCompletionStandardMessage("assistant", newContent)
+                        )
+                        pendingToolResults.clear()
+                    } else {
+                        convertedMessages.add(message)
+                    }
+                }
+
+                else -> {
+                    convertedMessages.add(message)
+                }
+            }
+        }
+
+        if (pendingToolResults.isNotEmpty()) {
+            val toolResultsContent = pendingToolResults.joinToString("\n") { (toolCallId, result) ->
+                "Tool result ($toolCallId): $result"
+            }
+            convertedMessages.add(
+                OpenAIChatCompletionStandardMessage(
+                    "assistant",
+                    "Tool execution results:\n$toolResultsContent"
+                )
+            )
+        }*/
+
+        return messages
     }
 }

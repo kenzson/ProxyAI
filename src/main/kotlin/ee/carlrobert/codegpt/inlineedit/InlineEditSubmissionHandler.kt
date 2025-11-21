@@ -151,7 +151,7 @@ class InlineEditSubmissionHandler(
             )
 
             val eventSource = service<CompletionRequestService>()
-                .getChatCompletionAsync(request, listener, selectedService)
+                .getChatCompletionAsync(request, listener, selectedService, null)
             currentEventSourceRef.set(eventSource)
         } catch (ex: Exception) {
             logger.warn("InlineAsk: request dispatch failed", ex)

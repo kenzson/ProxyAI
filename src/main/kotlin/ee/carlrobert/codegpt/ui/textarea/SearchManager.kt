@@ -8,10 +8,9 @@ import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupGroupItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.CodeAnalyzeActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
-import ee.carlrobert.codegpt.ui.textarea.lookup.action.ImageActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.action.DiagnosticsActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.ImageActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.WebActionItem
 import ee.carlrobert.codegpt.ui.textarea.lookup.group.*
 import kotlinx.coroutines.CancellationException
 
@@ -24,7 +23,7 @@ data class SearchState(
 class SearchManager(
     private val project: Project,
     private val tagManager: TagManager,
-    private val featureType: FeatureType? = null
+    private val featureType: FeatureType? = null,
 ) {
     companion object {
         private val logger = thisLogger()
@@ -43,21 +42,22 @@ class SearchManager(
         DiagnosticsActionItem(tagManager)
     ).filter { it.enabled }
 
-    private fun getAllGroups() = listOf(
+    private fun getAllGroups() = listOfNotNull(
         FilesGroupItem(project, tagManager),
         FoldersGroupItem(project, tagManager),
         GitGroupItem(project),
         HistoryGroupItem(),
         PersonasGroupItem(tagManager),
         DocsGroupItem(tagManager),
-        MCPGroupItem(),
+        MCPGroupItem(tagManager),
         DiagnosticsActionItem(tagManager),
         WebActionItem(tagManager),
         ImageActionItem(project, tagManager)
     ).filter { it.enabled }
 
     suspend fun performGlobalSearch(searchText: String): List<LookupActionItem> {
-        val allGroups = getDefaultGroups().filterNot { it is WebActionItem || it is ImageActionItem }
+        val allGroups =
+            getDefaultGroups().filterNot { it is WebActionItem || it is ImageActionItem }
         val allResults = mutableListOf<LookupActionItem>()
 
         allGroups.forEach { group ->
