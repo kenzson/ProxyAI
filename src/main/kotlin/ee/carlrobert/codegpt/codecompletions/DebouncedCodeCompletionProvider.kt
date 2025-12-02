@@ -4,7 +4,6 @@ import com.intellij.codeInsight.inline.completion.*
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionGrayTextElement
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSingleSuggestion
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSuggestion
-import com.intellij.codeInsight.lookup.LookupManager
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_CODE_COMPLETION
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
@@ -51,10 +50,6 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
         val editor = request.editor
         val project =
             editor.project ?: return InlineCompletionSingleSuggestion.build(elements = emptyFlow())
-
-        if (LookupManager.getActiveLookup(request.editor) != null) {
-            return InlineCompletionSingleSuggestion.build(elements = emptyFlow())
-        }
 
         return InlineCompletionSingleSuggestion.build(elements = channelFlow {
             try {
