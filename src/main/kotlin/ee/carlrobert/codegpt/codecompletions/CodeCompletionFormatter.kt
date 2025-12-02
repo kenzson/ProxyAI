@@ -227,6 +227,11 @@ class CodeCompletionFormatter(private val editor: Editor) {
         val lineCount = document.lineCount
         val originalNormalized = originalCompletion.trim()
 
+        if (originalCompletion.lines().size >= 3 && document.text.contains(originalCompletion)) {
+            completion = ""
+            return this
+        }
+
         for (i in 1..3) {
             val nextLineIndex = lineNumber + i
             if (nextLineIndex >= lineCount) break
