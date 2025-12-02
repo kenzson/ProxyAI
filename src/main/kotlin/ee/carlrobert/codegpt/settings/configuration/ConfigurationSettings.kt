@@ -59,8 +59,7 @@ class ChatCompletionSettingsState : BaseState() {
 class CodeCompletionSettingsState : BaseState() {
     var treeSitterProcessingEnabled by property(true)
     var gitDiffEnabled by property(true)
-    var collectDependencyStructure by property(true)
+    var collectDependencyStructure by property(false)
     var contextAwareEnabled by property(false)
     var psiStructureAnalyzeDepth by property(2)
-    var myAwesomeFeatureEnabled by property(true)
 }

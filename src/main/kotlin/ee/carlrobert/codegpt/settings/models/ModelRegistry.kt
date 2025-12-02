@@ -351,7 +351,7 @@ class ModelRegistry {
     private fun getNextEditModels(): List<ModelSelection> {
         return listOf(
             ModelSelection(ServiceType.PROXYAI, MERCURY_CODER, "Mercury Coder"),
-            ModelSelection(ServiceType.INCEPTION, MERCURY_CODER, "Mercury Coder")
+            ModelSelection(ServiceType.INCEPTION, MERCURY_CODER_NES_PREVIEW, "Mercury Coder (NES Preview)")
         )
     }
 
@@ -660,6 +660,7 @@ class ModelRegistry {
         const val LLAMA_3_2_3B_INSTRUCT = "llama-3.2-3b-instruct"
 
         const val MERCURY_CODER = "mercury-coder"
+        const val MERCURY_CODER_NES_PREVIEW = "mercury-coder-nes-preview"
 
         @JvmStatic
         fun getInstance(): ModelRegistry {

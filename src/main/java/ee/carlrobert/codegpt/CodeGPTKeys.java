@@ -45,7 +45,6 @@ public class CodeGPTKeys {
       Key.create("codegpt.lastCompletionResponseId");
   public static final Key<ToolWindowEditorFileDetails> TOOLWINDOW_EDITOR_FILE_DETAILS =
       Key.create("proxyai.toolwindowEditorFileDetails");
-
   public static final Key<NextEditDiffViewer> EDITOR_PREDICTION_DIFF_VIEWER =
       Key.create("codegpt.editorPredictionDiffViewer");
 }

@@ -10,6 +10,7 @@ import com.intellij.diff.tools.fragmented.UnifiedDiffViewer
 import com.intellij.diff.util.DiffUtil
 import com.intellij.diff.util.Side
 import com.intellij.openapi.Disposable
+import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Document
@@ -26,10 +27,10 @@ import com.intellij.testFramework.LightVirtualFile
 import com.intellij.util.application
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.JBUI
-import ee.carlrobert.codegpt.AutoImportHandler
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.service.NextEditResponse
+import kotlinx.coroutines.*
 import java.awt.Dimension
 import java.awt.Point
 import javax.swing.JComponent
@@ -49,6 +50,7 @@ class NextEditDiffViewer(
     private val visibleAreaListener: VisibleAreaListener
     private val caretListener: CaretListener
     private val grpcService = project?.service<GrpcClientService>()
+    private val coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private var applyInProgress = false
 
@@ -121,8 +123,6 @@ class NextEditDiffViewer(
             scheduleRediff()
         }
 
-        AutoImportHandler.handleAutoImports(mainEditor)
-
         application.executeOnPooledThread {
             val cursor = runReadAction { mainEditor.caretModel.offset }
             grpcService?.acceptEdit(nextEditResponse.id, leftText, rightText, cursor)
@@ -162,7 +162,12 @@ class NextEditDiffViewer(
         val length = document.textLength
         val safeStart = maxOf(0, minOf(start, length))
         val safeEnd = maxOf(safeStart, minOf(end, length))
-        return if (safeStart < length && safeEnd > safeStart) document.getText(TextRange(safeStart, safeEnd)) else ""
+        return if (safeStart < length && safeEnd > safeStart) document.getText(
+            TextRange(
+                safeStart,
+                safeEnd
+            )
+        ) else ""
     }
 
     private fun getClosestChange(): UnifiedDiffChange? {
@@ -176,8 +181,10 @@ class NextEditDiffViewer(
                 val rightStart = change.lineFragment.startOffset2
                 val rightEnd = change.lineFragment.endOffset2
 
-                val validLeft = leftStart >= 0 && leftEnd >= leftStart && leftStart < leftDoc.textLength
-                val validRight = rightStart >= 0 && rightEnd >= rightStart && rightStart < rightDoc.textLength
+                val validLeft =
+                    leftStart >= 0 && leftEnd >= leftStart && leftStart < leftDoc.textLength
+                val validRight =
+                    rightStart >= 0 && rightEnd >= rightStart && rightStart < rightDoc.textLength
 
                 if (!validLeft || !validRight) return@filter false
 
@@ -212,16 +219,19 @@ class NextEditDiffViewer(
             val change = getClosestChange() ?: return
             if (popup.isDisposed) return
 
-            adjustPopupSize(popup, myEditor)
+            coroutineScope.launch {
+                withContext(Dispatchers.EDT) {
+                    adjustPopupSize(popup, myEditor)
+                    val adjustedLocation = getAdjustedPopupLocation(
+                        mainEditor,
+                        change.lineFragment.startOffset1,
+                        popup.size
+                    )
 
-            val adjustedLocation = getAdjustedPopupLocation(
-                mainEditor,
-                change.lineFragment.startOffset1,
-                popup.size
-            )
-
-            if (popup.isVisible && !popup.isDisposed) {
-                popup.setLocation(adjustedLocation)
+                    if (popup.isVisible && !popup.isDisposed) {
+                        popup.setLocation(adjustedLocation)
+                    }
+                }
             }
         }
     }
@@ -247,8 +257,16 @@ class NextEditDiffViewer(
     }
 
     private fun computeCompactSize(change: UnifiedDiffChange): Dimension {
-        val leftText = safeGetText(getDocument(Side.LEFT), change.lineFragment.startOffset1, change.lineFragment.endOffset1)
-        val rightText = safeGetText(getDocument(Side.RIGHT), change.lineFragment.startOffset2, change.lineFragment.endOffset2)
+        val leftText = safeGetText(
+            getDocument(Side.LEFT),
+            change.lineFragment.startOffset1,
+            change.lineFragment.endOffset1
+        )
+        val rightText = safeGetText(
+            getDocument(Side.RIGHT),
+            change.lineFragment.startOffset2,
+            change.lineFragment.endOffset2
+        )
 
         fun linesOf(s: String): List<String> {
             val cleaned = s.replace("\r", "")
