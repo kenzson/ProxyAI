@@ -14,6 +14,7 @@ import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
 import ee.carlrobert.codegpt.settings.service.inception.InceptionSettings
+import ee.carlrobert.codegpt.util.EditWindowFormatter
 import ee.carlrobert.codegpt.util.GitUtil
 import ee.carlrobert.service.NextEditResponse
 import java.util.*
@@ -63,63 +64,29 @@ class InceptionNextEditProvider : NextEditProvider {
         caretOffset: Int
     ): NextEditResponse? {
         val vf = FileDocumentManager.getInstance().getFile(editor.document)
-        val request = InceptionRequestFactory().createNextEditRequest(
-            NextEditParameters(
-                project = editor.project,
-                fileName = vf?.name ?: "unknown",
-                filePath = vf?.path,
-                fileContent = fileContent,
-                caretOffset = caretOffset,
-                gitDiff = editor.project?.let { GitUtil.getCurrentChanges(it) } ?: "",
-                contextTokens = DEFAULT_CONTEXT_TOKENS
-            )
+        val params = NextEditParameters(
+            project = editor.project,
+            fileName = vf?.name ?: "unknown",
+            filePath = vf?.path,
+            fileContent = fileContent,
+            caretOffset = caretOffset,
+            gitDiff = editor.project?.let { GitUtil.getCurrentChanges(it) } ?: "",
+            contextTokens = DEFAULT_CONTEXT_TOKENS
         )
-
-        val fullWithMarkers = NextEditRequestProcessor.buildFileWithMarkers(
-            fileContent,
-            caretOffset,
-            10,
-            25,
-            50
-        )
+        val formatResult =
+            EditWindowFormatter.formatWithIndices(fileContent, params.fileName, caretOffset)
+        val request =
+            InceptionRequestFactory().createNextEditRequest(params, formatResult)
         val response = CompletionClientProvider.getInceptionClient().getNextEditCompletion(request)
         val text = response.choices?.firstOrNull()?.message?.content ?: return null
-        val editedRegion = extractNextRevision(text)
-        val next =
-            NextEditRequestProcessor.replaceEditableRegionStrict(fullWithMarkers, editedRegion)
+        val prefix = fileContent.substring(0, formatResult.editStartIndex)
+        val editedContent = NextEditRequestProcessor.extractCodeFromBackticks(text)
+        val suffix = fileContent.substring(formatResult.editEndIndex)
         return NextEditResponse.newBuilder()
             .setId(UUID.randomUUID().toString())
             .setOldRevision(fileContent)
-            .setNextRevision(next)
+            .setNextRevision(prefix + editedContent + suffix)
             .build()
-    }
-
-    private fun extractNextRevision(message: String): String {
-        return extractTripleBacktickCode(message)?.let { fenced ->
-            if (fenced.isNotBlank()) {
-                return fenced
-            }
-            return ""
-        } ?: ""
-    }
-
-    private fun extractTripleBacktickCode(message: String): String? {
-        val fence = "```"
-        val start = message.indexOf(fence)
-        if (start == -1) return null
-
-        var contentStart = start + fence.length
-        if (contentStart < message.length && message[contentStart] == '\n') {
-            contentStart += 1
-        } else {
-            val nl = message.indexOf('\n', contentStart)
-            if (nl != -1) contentStart = nl + 1
-        }
-
-        val end = message.lastIndexOf(fence)
-        if (end == -1 || end <= start) return null
-
-        return message.substring(contentStart, end).trim()
     }
 }
 

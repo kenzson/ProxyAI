@@ -6,6 +6,7 @@ import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.util.EditWindowFormatter.FormatResult
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.llm.client.inception.request.InceptionApplyRequest
 import ee.carlrobert.llm.client.inception.request.InceptionNextEditRequest
@@ -49,9 +50,9 @@ class InceptionRequestFactory : BaseRequestFactory() {
             .build()
     }
 
-    override fun createNextEditRequest(params: NextEditParameters): InceptionNextEditRequest {
+    override fun createNextEditRequest(params: NextEditParameters, formatResult: FormatResult): InceptionNextEditRequest {
         val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.NEXT_EDIT)
-        val content = composeNextEditMessage(params)
+        val content = composeNextEditMessage(params, formatResult)
         val message = OpenAIChatCompletionStandardMessage("user", content)
         return InceptionNextEditRequest.Builder()
             .setModel(model)

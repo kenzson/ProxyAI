@@ -26,6 +26,7 @@ import com.intellij.testFramework.LightVirtualFile
 import com.intellij.util.application
 import com.intellij.util.concurrency.annotations.RequiresEdt
 import com.intellij.util.ui.JBUI
+import ee.carlrobert.codegpt.AutoImportHandler
 import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
 import ee.carlrobert.service.NextEditResponse
@@ -106,8 +107,8 @@ class NextEditDiffViewer(
         val leftEnd = change.lineFragment.endOffset1
         val rightStart = change.lineFragment.startOffset2
         val rightEnd = change.lineFragment.endOffset2
-        val rightText = getDocument(Side.RIGHT).getText(TextRange(rightStart, rightEnd))
-        val leftText = getDocument(Side.LEFT).getText(TextRange(leftStart, leftEnd))
+        val rightText = safeGetText(getDocument(Side.RIGHT), rightStart, rightEnd)
+        val leftText = safeGetText(getDocument(Side.LEFT), leftStart, leftEnd)
 
         DiffUtil.executeWriteCommand(document, project, null) {
             replaceChange(change, masterSide)
@@ -119,6 +120,8 @@ class NextEditDiffViewer(
             moveCaretToOffset(caretTarget)
             scheduleRediff()
         }
+
+        AutoImportHandler.handleAutoImports(mainEditor)
 
         application.executeOnPooledThread {
             val cursor = runReadAction { mainEditor.caretModel.offset }
@@ -155,16 +158,31 @@ class NextEditDiffViewer(
         mainEditor.caretModel.removeCaretListener(caretListener)
     }
 
+    private fun safeGetText(document: Document, start: Int, end: Int): String {
+        val length = document.textLength
+        val safeStart = maxOf(0, minOf(start, length))
+        val safeEnd = maxOf(safeStart, minOf(end, length))
+        return if (safeStart < length && safeEnd > safeStart) document.getText(TextRange(safeStart, safeEnd)) else ""
+    }
+
     private fun getClosestChange(): UnifiedDiffChange? {
         val changes = diffChanges ?: emptyList()
         val filteredChanges = runReadAction {
             changes.filter { change ->
-                val leftText = getDocument(Side.LEFT).getText(
-                    TextRange(change.lineFragment.startOffset1, change.lineFragment.endOffset1)
-                )
-                val rightText = getDocument(Side.RIGHT).getText(
-                    TextRange(change.lineFragment.startOffset2, change.lineFragment.endOffset2)
-                )
+                val leftDoc = getDocument(Side.LEFT)
+                val rightDoc = getDocument(Side.RIGHT)
+                val leftStart = change.lineFragment.startOffset1
+                val leftEnd = change.lineFragment.endOffset1
+                val rightStart = change.lineFragment.startOffset2
+                val rightEnd = change.lineFragment.endOffset2
+
+                val validLeft = leftStart >= 0 && leftEnd >= leftStart && leftStart < leftDoc.textLength
+                val validRight = rightStart >= 0 && rightEnd >= rightStart && rightStart < rightDoc.textLength
+
+                if (!validLeft || !validRight) return@filter false
+
+                val leftText = safeGetText(leftDoc, leftStart, leftEnd)
+                val rightText = safeGetText(rightDoc, rightStart, rightEnd)
                 val recentCompletion = mainEditor.getUserData(CodeGPTKeys.RECENT_COMPLETION_TEXT)
                 if (recentCompletion != null && recentCompletion.isNotEmpty() && leftText.contains(
                         recentCompletion.trim()
@@ -229,12 +247,8 @@ class NextEditDiffViewer(
     }
 
     private fun computeCompactSize(change: UnifiedDiffChange): Dimension {
-        val leftText = getDocument(Side.LEFT).getText(
-            TextRange(change.lineFragment.startOffset1, change.lineFragment.endOffset1)
-        )
-        val rightText = getDocument(Side.RIGHT).getText(
-            TextRange(change.lineFragment.startOffset2, change.lineFragment.endOffset2)
-        )
+        val leftText = safeGetText(getDocument(Side.LEFT), change.lineFragment.startOffset1, change.lineFragment.endOffset1)
+        val rightText = safeGetText(getDocument(Side.RIGHT), change.lineFragment.startOffset2, change.lineFragment.endOffset2)
 
         fun linesOf(s: String): List<String> {
             val cleaned = s.replace("\r", "")

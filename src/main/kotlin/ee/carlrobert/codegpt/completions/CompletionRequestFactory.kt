@@ -1,9 +1,8 @@
 package ee.carlrobert.codegpt.completions
 
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
-import ee.carlrobert.codegpt.EncodingManager
-import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.CURSOR_MARKER
 import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.MAX_RECENTLY_VIEWED_SNIPPETS
 import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.RECENTLY_VIEWED_LINES
 import ee.carlrobert.codegpt.completions.factory.*
@@ -18,6 +17,7 @@ import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.util.EditWindowFormatter.FormatResult
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.codegpt.util.GitUtil
 import ee.carlrobert.codegpt.util.file.FileUtil
@@ -30,15 +30,14 @@ interface CompletionRequestFactory {
     fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest
     fun createCommitMessageRequest(params: CommitMessageCompletionParameters): CompletionRequest
     fun createLookupRequest(params: LookupCompletionParameters): CompletionRequest
-    fun createNextEditRequest(params: NextEditParameters): CompletionRequest {
+    fun createNextEditRequest(
+        params: NextEditParameters,
+        formatResult: FormatResult
+    ): CompletionRequest {
         throw UnsupportedOperationException("Next Edit is not supported by this provider")
     }
 
     companion object {
-        const val CURSOR_MARKER = "<|cursor|>"
-        const val DEFAULT_LINES_BEFORE = 50
-        const val DEFAULT_LINES_AFTER = 50
-        const val MAX_EDITABLE_REGION_LINES = 200
         const val MAX_RECENTLY_VIEWED_SNIPPETS = 3
         const val RECENTLY_VIEWED_LINES = 200
 
@@ -66,12 +65,12 @@ interface CompletionRequestFactory {
 }
 
 abstract class BaseRequestFactory : CompletionRequestFactory {
+
     companion object {
         private const val LOOKUP_MAX_TOKENS = 512
         private const val AUTO_APPLY_MAX_TOKENS = 8192
         private const val DEFAULT_MAX_TOKENS = 4096
     }
-
 
     override fun createInlineEditQuestionRequest(parameters: ChatCompletionParameters): CompletionRequest {
         val systemPrompt = """
@@ -111,8 +110,6 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
 
         return createChatRequest(newParams)
     }
-
-    data class InlineEditPrompts(val systemPrompt: String, val userPrompt: String)
 
     protected fun prepareInlineEditSystemPrompt(params: InlineEditCompletionParameters): String {
         val language = params.fileExtension ?: "txt"
@@ -283,45 +280,14 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         } ?: return callParameters.message.prompt
     }
 
-    protected fun composeNextEditMessage(params: NextEditParameters): String {
-        val (project, fileName, filePath, fileContent, caretOffset, gitDiff, _) = params
-
-        val encodingManager = EncodingManager.getInstance()
-        val prefixContent =
-            encodingManager.truncateText(fileContent.substring(0, caretOffset), 4096, true)
-        val suffixContent = encodingManager.truncateText(
-            fileContent.substring(caretOffset, fileContent.length),
-            4096,
-            false
-        )
-
-        val truncatedContent = prefixContent + suffixContent
-        val adjustedCaretOffset = prefixContent.length
-
-        val regionByLines = NextEditPromptUtil.determineEditableRegionByLines(
-            truncatedContent,
-            adjustedCaretOffset,
-            5,
-            15,
-            21
-        )
-
-        val startPos = regionByLines.first
-        val endPos = regionByLines.second
-
-        val prefix = truncatedContent.substring(0, startPos)
-        val regionContent = truncatedContent.substring(startPos, endPos)
-        val suffix = truncatedContent.substring(endPos)
-
-        val cursorPosInRegion = (adjustedCaretOffset - startPos).coerceIn(0, regionContent.length)
-        val editableWithCursor =
-            regionContent.substring(0, cursorPosInRegion) + CURSOR_MARKER + regionContent.substring(
-                cursorPosInRegion
-            )
-
+    protected fun composeNextEditMessage(
+        params: NextEditParameters,
+        formatResult: FormatResult
+    ): String {
+        val (project) = params
         val recentlyViewedBlock = NextEditPromptUtil.buildRecentlyViewedBlock(
             project,
-            filePath,
+            params.filePath,
             MAX_RECENTLY_VIEWED_SNIPPETS,
             RECENTLY_VIEWED_LINES
         )
@@ -329,18 +295,10 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         val promptBuilder = StringBuilder()
         promptBuilder.append(recentlyViewedBlock)
 
-        promptBuilder.append("\n<|current_file_content|>\n")
-        promptBuilder.append("current_file_path: ").append(fileName).append('\n')
-        promptBuilder.append(prefix)
-        promptBuilder.append("\n<|code_to_edit|>\n")
-        promptBuilder.append(editableWithCursor)
-        if (!editableWithCursor.endsWith('\n')) promptBuilder.append('\n')
-        promptBuilder.append("\n<|/code_to_edit|>\n")
-        promptBuilder.append(suffix)
-        promptBuilder.append("\n<|/current_file_content|>\n\n")
+        promptBuilder.append("\n").append(formatResult.formattedContent).append("\n\n")
 
         promptBuilder.append("<|edit_diff_history|>\n")
-        val gitDiffRaw = gitDiff ?: buildEditDiffHistory(project)
+        val gitDiffRaw = params.gitDiff ?: buildEditDiffHistory(project)
         if (gitDiffRaw.isNotEmpty()) {
             promptBuilder.append(gitDiffRaw).append('\n')
         }
@@ -349,7 +307,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
         return promptBuilder.toString()
     }
 
-    protected fun buildEditDiffHistory(project: com.intellij.openapi.project.Project?): String {
+    protected fun buildEditDiffHistory(project: Project?): String {
         if (project == null) return ""
         return try {
             GitUtil.getCurrentChanges(project).orEmpty()
