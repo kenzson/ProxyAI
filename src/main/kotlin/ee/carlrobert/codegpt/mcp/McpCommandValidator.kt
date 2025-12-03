@@ -1,10 +1,13 @@
 package ee.carlrobert.codegpt.mcp
 
 import com.intellij.execution.configurations.PathEnvironmentVariableUtil
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.util.SystemInfo
 import java.io.File
 
 object McpCommandValidator {
+
+    private val logger = thisLogger()
 
     fun resolveCommand(command: String): String? {
         val commandFile = File(command)
@@ -22,8 +25,39 @@ object McpCommandValidator {
         PathEnvironmentVariableUtil.findInPath(command)?.let {
             return it.absolutePath
         }
-        findViaNodeVersionManager(command)?.let { return it }
-        findViaEnvironmentHints(command)?.let { return it }
+
+        findInCommonMacOSLocations(command)?.let {
+            return it
+        }
+
+        findViaNodeVersionManager(command)?.let {
+            return it
+        }
+
+        findViaEnvironmentHints(command)?.let {
+            return it
+        }
+
+        logger.warn("$command not found in any location")
+        return null
+    }
+
+    private fun findInCommonMacOSLocations(command: String): String? {
+        if (!SystemInfo.isMac) {
+            return null
+        }
+
+        val commonLocations = listOf(
+            "/usr/local/bin",           // Homebrew (Intel Mac)
+            "/opt/homebrew/bin",        // Homebrew (Apple Silicon)
+            "/usr/bin",                 // System Node.js
+            "/usr/local/share/npm/bin", // npm global bin
+            "/opt/homebrew/share/npm/bin" // npm global bin (Apple Silicon)
+        )
+
+        for (location in commonLocations) {
+            findExecutableInDirectory(File(location), command)?.let { return it }
+        }
 
         return null
     }
@@ -69,7 +103,6 @@ object McpCommandValidator {
             return executable.absolutePath
         }
 
-        // On Windows, try with extensions
         if (SystemInfo.isWindows) {
             for (ext in listOf(".exe", ".cmd", ".bat")) {
                 val executableWithExt = File(directory, command + ext)

@@ -3,6 +3,7 @@ package ee.carlrobert.codegpt.settings.mcp
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
 import ee.carlrobert.codegpt.mcp.McpCommandValidator
+import ee.carlrobert.codegpt.mcp.McpPathHelper
 import io.modelcontextprotocol.client.McpClient
 import io.modelcontextprotocol.client.McpSyncClient
 import io.modelcontextprotocol.client.transport.ServerParameters
@@ -21,9 +22,10 @@ class McpClientManager {
             val resolvedCommand = McpCommandValidator.resolveCommand(command)
                 ?: throw IllegalStateException(McpCommandValidator.getCommandNotFoundMessage(command))
 
+            val enhancedEnv = McpPathHelper.createEnvironment(serverDetails.environmentVariables)
             val connectionParams = ServerParameters.builder(resolvedCommand)
                 .args(*serverDetails.arguments.toTypedArray())
-                .env(serverDetails.environmentVariables)
+                .env(enhancedEnv)
                 .build()
 
             McpClient.sync(StdioClientTransport(connectionParams))

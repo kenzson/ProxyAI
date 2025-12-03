@@ -40,6 +40,9 @@ class McpSessionManager {
                 val resolvedCommand = McpCommandValidator.resolveCommand(command)
                 if (resolvedCommand == null) {
                     val errorMsg = McpCommandValidator.getCommandNotFoundMessage(command)
+                    logger.error(
+                        "MCP command not found for server '${serverDetails.name}' (id=$serverId): $command"
+                    )
                     throw IllegalArgumentException("Failed to resolve command: $errorMsg")
                 }
 
@@ -83,6 +86,9 @@ class McpSessionManager {
                 )
                 val convAttachments = getConversationAttachments(conversationId)
                 convAttachments[serverId] = attachment
+                logger.error(
+                    "Failed to attach MCP server '${serverDetails?.name ?: serverId}' (id=$serverId): ${e.message}"
+                )
                 attachment
             }
         }
@@ -122,11 +128,12 @@ class McpSessionManager {
 
             if (attachment != null && attachment.isConnected()) {
                 try {
+                    logger.info("Reconnecting MCP client for key '$clientKey'")
                     val reconnectFuture = reconnectServer(UUID.fromString(conversationId), serverId)
                     reconnectFuture.get()
                     return@supplyAsync activeClients[clientKey]
                 } catch (e: Exception) {
-                    logger.warn("Failed to reconnect MCP client for key '$clientKey'", e)
+                    logger.error("Failed to reconnect MCP client for key '$clientKey'", e)
                 }
             }
 
@@ -183,8 +190,7 @@ class McpSessionManager {
 
                 val convAttachments = getConversationAttachments(conversationId)
                 convAttachments.remove(serverId)
-
-
+                logger.info("Detached MCP server '$serverId' from conversation '$conversationId'")
             } catch (e: Exception) {
                 logger.error(
                     "Failed to detach MCP server '$serverId' from conversation '$conversationId'",
