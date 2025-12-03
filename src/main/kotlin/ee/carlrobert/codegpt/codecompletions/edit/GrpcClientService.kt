@@ -63,7 +63,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         val prev = ctx.attach()
         try {
             codeCompletionStub
-                ?.withDeadlineAfter(10, TimeUnit.SECONDS)
+                ?.withDeadlineAfter(2, TimeUnit.SECONDS)
                 ?.getCodeCompletion(grpcRequest, codeCompletionObserver)
         } finally {
             ctx.detach(prev)
@@ -94,7 +94,7 @@ class GrpcClientService(private val project: Project) : Disposable {
         val prev = ctx.attach()
         try {
             nextEditStub
-                ?.withDeadlineAfter(10, TimeUnit.SECONDS)
+                ?.withDeadlineAfter(2, TimeUnit.SECONDS)
                 ?.nextEdit(request, nextEditStreamObserver)
         } finally {
             ctx.detach(prev)
@@ -225,11 +225,11 @@ class GrpcClientService(private val project: Project) : Disposable {
                 .trustManager(CertificateManager.getInstance().trustManager)
                 .build()
         )
-        .withOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10_000)
+        .withOption(ChannelOption.CONNECT_TIMEOUT_MILLIS, 5_000)
         .keepAliveTime(2, TimeUnit.MINUTES)
         .keepAliveTimeout(20, TimeUnit.SECONDS)
-        .keepAliveWithoutCalls(false)
-        .idleTimeout(5, TimeUnit.MINUTES)
+        .keepAliveWithoutCalls(true)
+        .idleTimeout(30, TimeUnit.MINUTES)
         .maxInboundMessageSize(32 * 1024 * 1024)
         .build()
 

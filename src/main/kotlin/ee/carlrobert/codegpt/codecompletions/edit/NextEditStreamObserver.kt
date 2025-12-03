@@ -11,12 +11,11 @@ import ee.carlrobert.service.NextEditResponse
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
-import kotlin.coroutines.cancellation.CancellationException
 
 class NextEditStreamObserver(
     private val editor: Editor,
     private val addToQueue: Boolean = false,
-    private val onDispose: () -> Unit
+    private val onRefreshConnection: () -> Unit
 ) : StreamObserver<NextEditResponse> {
 
     companion object {
@@ -40,25 +39,11 @@ class NextEditStreamObserver(
     }
 
     override fun onError(ex: Throwable) {
-        if (ex is CancellationException ||
-            (ex is StatusRuntimeException && ex.status.code == Status.Code.CANCELLED)
-        ) {
-            onCompleted()
-            return
+        if (ex is StatusRuntimeException && ex.status.code == Status.Code.UNAVAILABLE) {
+            onRefreshConnection()
         }
 
-        try {
-            if (ex is StatusRuntimeException) {
-                if (ex.status.code == Status.Code.DEADLINE_EXCEEDED) {
-                    return
-                }
-            } else {
-                logger.error("Something went wrong", ex)
-            }
-        } finally {
-            onCompleted()
-            onDispose()
-        }
+        onCompleted()
     }
 
     override fun onCompleted() {

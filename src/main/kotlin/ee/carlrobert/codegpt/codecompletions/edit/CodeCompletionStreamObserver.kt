@@ -1,13 +1,13 @@
 package ee.carlrobert.codegpt.codecompletions.edit
 
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionElement
-import com.intellij.openapi.editor.Editor
-import ee.carlrobert.codegpt.CodeGPTKeys
 import com.intellij.notification.NotificationType
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.editor.Editor
+import ee.carlrobert.codegpt.CodeGPTKeys
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
-import ee.carlrobert.llm.client.openai.completion.ErrorDetails
 import ee.carlrobert.codegpt.ui.OverlayUtil
+import ee.carlrobert.llm.client.openai.completion.ErrorDetails
 import ee.carlrobert.service.PartialCodeCompletionResponse
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
@@ -43,26 +43,25 @@ class CodeCompletionStreamObserver(
     }
 
     override fun onError(t: Throwable?) {
-        if (t is StatusRuntimeException && t.status.code == Status.Code.CANCELLED) {
-            eventListener.onCancelled(messageBuilder)
-            channel.close()
-            return
-        }
-        logger.error("Error occurred while fetching code completion", t)
         if (t is StatusRuntimeException) {
             val code = t.status.code
-            if (code != Status.Code.UNAVAILABLE && code != Status.Code.DEADLINE_EXCEEDED) {
-                OverlayUtil.showNotification(
-                    t.message ?: "Something went wrong",
-                    NotificationType.ERROR
-                )
+            if (code == Status.Code.CANCELLED || code == Status.Code.DEADLINE_EXCEEDED) {
+                eventListener.onComplete(messageBuilder)
+                return
             }
-        } else {
-            OverlayUtil.showNotification(
-                t?.message ?: "Something went wrong",
-                NotificationType.ERROR
-            )
+
+            if (code == Status.Code.UNAVAILABLE) {
+                eventListener.onError(ErrorDetails("Connection unavailable"), t)
+                channel.close(t)
+                return
+            }
         }
+
+        logger.error("Unexpected error occurred while fetching code completion", t)
+        OverlayUtil.showNotification(
+            t?.message ?: "Something went wrong",
+            NotificationType.ERROR
+        )
         eventListener.onError(ErrorDetails(t?.message ?: "Code completion error"), t ?: Throwable())
         channel.close(t)
     }
