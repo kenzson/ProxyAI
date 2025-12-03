@@ -15,8 +15,8 @@ internal class JavaResolver : AutoImportResolver {
     override fun getUnresolvedImports(
         file: PsiFile,
         searchRange: TextRange
-    ): List<String> {
-        val result = mutableListOf<String>()
+    ): Map<UnresolvedSymbol, List<String>> {
+        val result = mutableMapOf<UnresolvedSymbol, List<String>>()
         file.accept(object : JavaRecursiveElementWalkingVisitor() {
             override fun visitReferenceElement(referenceElement: PsiJavaCodeReferenceElement) {
                 super.visitReferenceElement(referenceElement)
@@ -29,14 +29,12 @@ internal class JavaResolver : AutoImportResolver {
                     if (name.isNotBlank()) {
                         val range = referenceElement.textRange ?: TextRange.EMPTY_RANGE
                         val symbol = UnresolvedSymbol(name, referenceElement as PsiReference, range)
-                        bestCandidateFor(symbol, file)?.let {
-                            result.add(it)
-                        }
+                        result.put(symbol, bestCandidatesFor(symbol, file))
                     }
                 }
             }
         })
-        return result.distinctBy { it }
+        return result
     }
 
     override fun applyImport(file: PsiFile, importFqn: String): Boolean {
@@ -53,17 +51,18 @@ internal class JavaResolver : AutoImportResolver {
                 val endOffset = importList.nextSibling?.textRange?.startOffset?.let { it + 1 }
                     ?: importList.textRange.endOffset
 
-                CodeStyleManager.getInstance(project).reformatRange(file,
+                CodeStyleManager.getInstance(project).reformatRange(
+                    file,
                     importList.textRange.startOffset,
-                    endOffset.coerceAtMost(file.textRange.endOffset))
+                    endOffset.coerceAtMost(file.textRange.endOffset)
+                )
             }
-            javaCodeStyleManager.optimizeImports(file)
         }
         return added
     }
 
-    private fun bestCandidateFor(symbol: UnresolvedSymbol, file: PsiFile): String? {
-        if (file !is PsiJavaFile) return null
+    private fun bestCandidatesFor(symbol: UnresolvedSymbol, file: PsiFile): List<String> {
+        if (file !is PsiJavaFile) return emptyList()
         val project = file.project
         val scope = GlobalSearchScope.allScope(project)
         val classes = runReadAction {
@@ -79,34 +78,22 @@ internal class JavaResolver : AutoImportResolver {
         }
         val currentPackage = runReadAction { file.packageName }
 
-        val fqns = classes.mapNotNull { runReadAction { it.qualifiedName } }
+        return classes.mapNotNull { runReadAction { it.qualifiedName } }
             .filter { qn ->
                 val pkg = qn.substringBeforeLast('.', "")
                 pkg != currentPackage && qn !in alreadyImported
             }
+            .sortedByDescending { fqn -> getPackageScore(fqn) }
             .distinct()
-            .sorted()
-
-        return fqns.asSequence()
-            .filterNot { it.startsWith("com.sun.") || it.startsWith("sun.") }
-            .sortedByDescending { rankImport(it) }
-            .firstOrNull()
     }
 
-    private fun rankImport(fqn: String): Int {
-        var score = 0
-
-        when {
-            fqn.startsWith("java.util.") -> score += 100
-            fqn.startsWith("java.lang.") -> score += 90
-            fqn.startsWith("java.io.") -> score += 80
-            fqn.startsWith("java.nio.") -> score += 80
-            fqn.startsWith("java.time.") -> score += 70
-            fqn.startsWith("java.awt.") -> score -= 50
-            fqn.startsWith("javax.swing.") -> score -= 30
+    private fun getPackageScore(fqn: String): Int {
+        return when {
+            fqn.startsWith("java.") -> 100
+            fqn.startsWith("javax.") -> 90
+            fqn.startsWith("org.springframework.") -> 80
+            else -> 0
         }
-
-        return score
     }
 
     private fun isInRange(ref: PsiReference, searchRange: TextRange): Boolean {

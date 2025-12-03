@@ -1,13 +1,11 @@
 package ee.carlrobert.codegpt.autoimport
 
-import com.intellij.openapi.components.service
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.JavaPsiFacade
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiReference
 import com.intellij.psi.codeStyle.CodeStyleManager
-import com.intellij.psi.codeStyle.JavaCodeStyleManager
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.PsiShortNamesCache
 import org.jetbrains.kotlin.name.FqName
@@ -23,8 +21,8 @@ internal class KtResolver : AutoImportResolver {
     override fun getUnresolvedImports(
         file: PsiFile,
         searchRange: TextRange
-    ): List<String> {
-        val result = mutableListOf<String>()
+    ): Map<UnresolvedSymbol, List<String>> {
+        val result = mutableMapOf<UnresolvedSymbol, List<String>>()
         file.accept(object : KtTreeVisitorVoid() {
             override fun visitElement(element: PsiElement) {
                 super.visitElement(element)
@@ -40,16 +38,14 @@ internal class KtResolver : AutoImportResolver {
                             if (name.isNotBlank()) {
                                 val range = element.textRange ?: TextRange.EMPTY_RANGE
                                 val symbol = UnresolvedSymbol(name, ref, range)
-                                bestCandidateFor(symbol, file)?.let {
-                                    result.add(it)
-                                }
+                                result.put(symbol, bestCandidatesFor(symbol, file))
                             }
                         }
                     }
                 }
             }
         })
-        return result.distinctBy { it }
+        return result
     }
 
     override fun applyImport(file: PsiFile, importFqn: String): Boolean {
@@ -76,8 +72,8 @@ internal class KtResolver : AutoImportResolver {
         return true
     }
 
-    private fun bestCandidateFor(symbol: UnresolvedSymbol, file: PsiFile): String? {
-        if (file !is KtFile) return null
+    private fun bestCandidatesFor(symbol: UnresolvedSymbol, file: PsiFile): List<String> {
+        if (file !is KtFile) return emptyList()
         val project = file.project
         val facade = JavaPsiFacade.getInstance(project)
         val scope = GlobalSearchScope.allScope(project)
@@ -94,12 +90,20 @@ internal class KtResolver : AutoImportResolver {
             .getClassesByName(name, scope)
             .mapNotNull { it.qualifiedName }
 
-        val fqns = (fromJavaFacade + fromShortNamesCache)
+        return (fromJavaFacade + fromShortNamesCache)
             .filter { qn -> qn !in alreadyImported }
             .distinct()
+            .sortedByDescending { fqn -> getPackageScore(fqn) }
             .sorted()
+    }
 
-        return fqns.asSequence().firstOrNull()
+    private fun getPackageScore(fqn: String): Int {
+        return when {
+            fqn.startsWith("java.") -> 100
+            fqn.startsWith("javax.") -> 90
+            fqn.startsWith("org.springframework.") -> 80
+            else -> 0
+        }
     }
 
     private fun isInRange(ref: PsiReference, searchRange: TextRange?): Boolean {

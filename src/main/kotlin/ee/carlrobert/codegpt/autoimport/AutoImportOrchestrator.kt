@@ -15,13 +15,7 @@ data class UnresolvedSymbol(
     val range: TextRange,
 )
 
-data class ImportCandidate(
-    val fqn: String,
-)
-
 object AutoImportOrchestrator {
-
-    private val logger = thisLogger()
 
     private val resolvers: List<AutoImportResolver> = listOf(
         JavaResolver(),
@@ -36,16 +30,19 @@ object AutoImportOrchestrator {
     fun previewImports(editor: Editor, range: TextRange? = null): String? {
         val project = editor.project ?: return null
         val psiFile =
-            PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return null
+            runReadAction { PsiDocumentManager.getInstance(project).getPsiFile(editor.document) }
+                ?: return null
         val clonedPsiFile = psiFile.copy() as? PsiFile ?: return null
         val rangeToUse = range ?: runReadAction { TextRange(0, editor.document.textLength) }
         val resolver = resolvers.firstOrNull { it.supports(clonedPsiFile) } ?: return null
 
         runReadAction { resolver.getUnresolvedImports(psiFile, rangeToUse) }
-            .forEach {
+            .forEach { symbol, imports ->
                 WriteCommandAction.runWriteCommandAction(project) {
-                    if (!resolver.applyImport(clonedPsiFile, it)) {
-                        logger.warn("Failed to apply import: $it")
+                    for (import in imports) {
+                        if (resolver.applyImport(clonedPsiFile, import)) {
+                            break
+                        }
                     }
                 }
             }
