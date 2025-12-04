@@ -1,9 +1,7 @@
 package ee.carlrobert.codegpt.codecompletions.edit
 
-import com.intellij.codeInsight.inline.completion.InlineCompletionRequest
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionElement
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
@@ -11,6 +9,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.util.net.ssl.CertificateManager
 import ee.carlrobert.codegpt.CodeGPTPlugin
 import ee.carlrobert.codegpt.codecompletions.CodeCompletionEventListener
+import ee.carlrobert.codegpt.codecompletions.InfillRequest
 import ee.carlrobert.codegpt.credentials.CredentialsStore
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey.CodeGptApiKey
 import ee.carlrobert.codegpt.settings.service.FeatureType
@@ -48,15 +47,16 @@ class GrpcClientService(private val project: Project) : Disposable {
     }
 
     fun getCodeCompletionAsync(
+        request: InfillRequest,
         eventListener: CodeCompletionEventListener,
-        request: InlineCompletionRequest,
         channel: ProducerScope<InlineCompletionElement>
     ) {
         ensureCodeCompletionConnection()
 
+        val editor = request.editor ?: return
         val grpcRequest = createCodeCompletionGrpcRequest(request)
         codeCompletionObserver =
-            CodeCompletionStreamObserver(request.editor, channel, eventListener)
+            CodeCompletionStreamObserver(editor, channel, eventListener)
         codeCompletionContext?.cancel(null)
         val ctx = Context.current().withCancellation()
         codeCompletionContext = ctx
@@ -186,16 +186,17 @@ class GrpcClientService(private val project: Project) : Disposable {
         }
     }
 
-    private fun createCodeCompletionGrpcRequest(request: InlineCompletionRequest): GrpcCodeCompletionRequest {
-        val editor = request.editor
+    private fun createCodeCompletionGrpcRequest(request: InfillRequest): GrpcCodeCompletionRequest {
+        val fileDetails = request.fileDetails ?: throw IllegalArgumentException("File details are required")
+        val gitDiff = request.gitDiff ?: ""
         return GrpcCodeCompletionRequest.newBuilder()
             .setModel(
                 ModelSelectionService.getInstance().getModelForFeature(FeatureType.CODE_COMPLETION)
             )
-            .setFilePath(editor.virtualFile.path)
-            .setFileContent(editor.document.text)
-            .setGitDiff(GitUtil.getCurrentChanges(project) ?: "")
-            .setCursorPosition(runReadAction { editor.caretModel.offset })
+            .setFilePath(fileDetails.filePath)
+            .setFileContent(fileDetails.fileContent)
+            .setGitDiff(gitDiff)
+            .setCursorPosition(request.caretOffset)
             .setPluginVersion(CodeGPTPlugin.getVersion())
             .build()
     }

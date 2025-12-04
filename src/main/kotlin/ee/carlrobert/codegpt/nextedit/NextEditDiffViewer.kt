@@ -83,7 +83,7 @@ class NextEditDiffViewer(
 
         val size = computeCompactSize(change)
         myEditor.component.preferredSize = size
-        adjustPopupSize(popup, myEditor)
+        adjustPopupSize(popup, myEditor, mainEditor)
 
         val changeOffset = change.lineFragment.startOffset1
         val adjustedLocation = getAdjustedPopupLocation(mainEditor, changeOffset, size)
@@ -221,7 +221,7 @@ class NextEditDiffViewer(
 
             coroutineScope.launch {
                 withContext(Dispatchers.EDT) {
-                    adjustPopupSize(popup, myEditor)
+                    adjustPopupSize(popup, myEditor, mainEditor)
                     val adjustedLocation = getAdjustedPopupLocation(
                         mainEditor,
                         change.lineFragment.startOffset1,
@@ -342,31 +342,60 @@ fun getAdjustedPopupLocation(editor: Editor, changeOffset: Int, popupSize: Dimen
         SwingUtilities.convertPointToScreen(point, editor.component)
         return point
     }
+
     val visibleArea = editor.scrollingModel.visibleArea
     val editorLocationOnScreen = editor.component.locationOnScreen
-    val vsOffset = editor.scrollingModel.verticalScrollOffset
-    val marginX = +(editor as EditorEx).gutterComponentEx.size.width
-    val yInEditor = pointInEditor.y
+    val verticalOffset = editor.scrollingModel.verticalScrollOffset
+    val gutterWidth = (editor as? EditorEx)?.gutterComponentEx?.size?.width ?: 0
+    val margin = JBUI.scale(8)
 
-    val spaceBelow = visibleArea.y + visibleArea.height - yInEditor - editor.lineHeight
-    val fitsBelow = spaceBelow >= popupSize.height
-    if (fitsBelow) {
-        val top = editorLocationOnScreen.y + yInEditor - vsOffset
-        val left = editorLocationOnScreen.x + pointInEditor.x + marginX
+    val yInEditor = pointInEditor.y
+    val visibleTopY = visibleArea.y
+    val visibleBottomY = visibleArea.y + visibleArea.height
+    val changeIsVisible = yInEditor in visibleTopY until visibleBottomY
+
+    if (changeIsVisible) {
+        val spaceBelow = visibleBottomY - yInEditor - editor.lineHeight
+        val fitsBelow = spaceBelow >= popupSize.height
+        if (fitsBelow) {
+            val rawLeft = editorLocationOnScreen.x + pointInEditor.x + gutterWidth
+            val minLeft = editorLocationOnScreen.x + visibleArea.x + margin
+            val maxLeft = editorLocationOnScreen.x + visibleArea.x + visibleArea.width - popupSize.width - margin
+            val left = rawLeft.coerceIn(minLeft, maxLeft)
+            val top = editorLocationOnScreen.y + yInEditor - verticalOffset
+            return Point(left, top)
+        }
+
+        val screenChangeY = editorLocationOnScreen.y + yInEditor - verticalOffset
+        val spaceAbove = screenChangeY - editorLocationOnScreen.y
+        val canPlaceAbove = spaceAbove >= popupSize.height + margin
+        val top = if (canPlaceAbove) {
+            screenChangeY - popupSize.height - margin
+        } else {
+            val centered = screenChangeY - popupSize.height / 2
+            val minTop = editorLocationOnScreen.y + margin
+            val maxTop = editorLocationOnScreen.y + visibleArea.height - popupSize.height - margin
+            centered.coerceIn(minTop, maxTop)
+        }
+        val left = editorLocationOnScreen.x + visibleArea.x + visibleArea.width - popupSize.width - gutterWidth
         return Point(left, top)
     }
 
-    val left =
-        editorLocationOnScreen.x + visibleArea.x + visibleArea.width - popupSize.width - marginX
-    val visibleBottom = editorLocationOnScreen.y + visibleArea.height
-    var top = editorLocationOnScreen.y + yInEditor - vsOffset - popupSize.height / 2
-    top = top.coerceIn(editorLocationOnScreen.y, visibleBottom - popupSize.height)
+    val topAligned = editorLocationOnScreen.y + margin
+    val bottomAligned = editorLocationOnScreen.y + visibleArea.height - popupSize.height - margin
+    val top = if (yInEditor < visibleTopY) topAligned else bottomAligned
+    val left = editorLocationOnScreen.x + visibleArea.x + visibleArea.width - popupSize.width - gutterWidth
     return Point(left, top)
 }
 
-fun adjustPopupSize(popup: JBPopup, editor: Editor) {
-    val newWidth = editor.component.preferredSize.width
-    val newHeight = editor.component.preferredSize.height
+fun adjustPopupSize(popup: JBPopup, contentEditor: Editor, anchorEditor: Editor) {
+    val preferred = contentEditor.component.preferredSize
+    val visibleArea = anchorEditor.scrollingModel.visibleArea
+    val margin = JBUI.scale(16)
+    val maxWidth = (visibleArea.width - margin).coerceAtLeast(JBUI.scale(64))
+    val maxHeight = (visibleArea.height - margin).coerceAtLeast(JBUI.scale(48))
+    val newWidth = preferred.width.coerceAtMost(maxWidth)
+    val newHeight = preferred.height.coerceAtMost(maxHeight)
     popup.size = Dimension(newWidth, newHeight)
     popup.content.revalidate()
     popup.content.repaint()

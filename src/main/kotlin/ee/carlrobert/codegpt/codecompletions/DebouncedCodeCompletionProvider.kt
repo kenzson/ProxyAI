@@ -71,20 +71,19 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
                 CompletionProgressNotifier.update(project, true)
 
                 var eventListener = CodeCompletionEventListener(request.editor, this)
+                val infillRequest = InfillRequestUtil.buildInfillRequest(request)
 
                 if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) == ServiceType.PROXYAI) {
-                    project.service<GrpcClientService>().cancelCodeCompletion()
-                    project.service<GrpcClientService>()
-                        .getCodeCompletionAsync(eventListener, request, this)
+                    val grpcClient = project.service<GrpcClientService>()
+                    grpcClient.cancelCodeCompletion()
+                    grpcClient.getCodeCompletionAsync(infillRequest, eventListener, this)
                     return@channelFlow
                 }
 
-                val infillRequest = InfillRequestUtil.buildInfillRequest(request)
                 val call = service<CodeCompletionService>().getCodeCompletionAsync(
                     infillRequest,
                     CodeCompletionEventListener(request.editor, this)
                 )
-
                 currentCallRef.set(call)
             } finally {
                 awaitClose { currentCallRef.getAndSet(null)?.cancel() }
@@ -131,13 +130,8 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             return false
         }
 
-        if (event is LookupInlineCompletionEvent || event is InlineCompletionEvent.DirectCall) {
-            return true
-        }
-
-        val hasActiveCompletion =
-            REMAINING_CODE_COMPLETION.get(event.toRequest()?.editor)?.partialCompletion?.isNotEmpty() == true
-
-        return event is InlineCompletionEvent.DocumentChange || hasActiveCompletion
+        return event is LookupInlineCompletionEvent
+                || event is InlineCompletionEvent.DirectCall
+                || event is InlineCompletionEvent.DocumentChange
     }
 }

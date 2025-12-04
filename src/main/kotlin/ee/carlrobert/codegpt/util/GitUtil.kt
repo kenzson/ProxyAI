@@ -153,17 +153,4 @@ object GitUtil {
                     !it.startsWith("commit ")
         }
     }
-
-    private fun String.cleanDiff(showContext: Boolean = false): String =
-        lineSequence()
-            .filterNot { line ->
-                line.startsWith("index ") ||
-                        line.startsWith("diff --git") ||
-                        line.startsWith("---") ||
-                        line.startsWith("+++") ||
-                        line.startsWith("===") ||
-                        line.contains("\\ No newline at end of file")
-                (!showContext && line.startsWith(" "))
-            }
-            .joinToString("\n")
 }

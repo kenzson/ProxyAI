@@ -11,6 +11,7 @@ import ee.carlrobert.service.NextEditResponse
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
 import io.grpc.stub.StreamObserver
+import ee.carlrobert.codegpt.codecompletions.CodeCompletionFormatter
 
 class NextEditStreamObserver(
     private val editor: Editor,
