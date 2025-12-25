@@ -1,9 +1,11 @@
 package ee.carlrobert.codegpt.codecompletions
 
 import com.intellij.openapi.application.runReadAction
+import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings
 import org.apache.commons.text.similarity.LevenshteinDistance
 import kotlin.math.min
 
@@ -37,17 +39,14 @@ class CodeCompletionFormatter(private val editor: Editor) {
     private var originalCompletion = ""
     private var isDebugEnabled = false
 
-    fun withDebug(): CodeCompletionFormatter {
-        isDebugEnabled = true
-        return this
-    }
-
     fun format(completion: String): String {
         this.completion = ""
         this.normalizedCompletion = completion.trim()
         this.originalCompletion = completion
+        this.isDebugEnabled = service<ConfigurationSettings>().state.debugModeEnabled
 
-        return matchCompletionBrackets()
+        return this
+            .matchCompletionBrackets()
             .removeSuffix()
             .removeDuplicateQuotes()
             .removeMiddleQuotes()
@@ -227,6 +226,11 @@ class CodeCompletionFormatter(private val editor: Editor) {
     private fun preventDuplicates(): CodeCompletionFormatter {
         val lineCount = document.lineCount
         val originalNormalized = originalCompletion.trim()
+
+        if (originalCompletion.lines().size >= 3 && document.text.contains(originalCompletion)) {
+            completion = ""
+            return this
+        }
 
         for (i in 1..3) {
             val nextLineIndex = lineNumber + i

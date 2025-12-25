@@ -4,7 +4,6 @@ import com.intellij.codeInsight.inline.completion.*
 import com.intellij.codeInsight.inline.completion.elements.InlineCompletionGrayTextElement
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSingleSuggestion
 import com.intellij.codeInsight.inline.completion.suggestion.InlineCompletionSuggestion
-import com.intellij.codeInsight.lookup.LookupManager
 import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.CodeGPTKeys.REMAINING_CODE_COMPLETION
 import ee.carlrobert.codegpt.codecompletions.edit.GrpcClientService
@@ -52,12 +51,9 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
         val project =
             editor.project ?: return InlineCompletionSingleSuggestion.build(elements = emptyFlow())
 
-        if (LookupManager.getActiveLookup(request.editor) != null) {
-            return InlineCompletionSingleSuggestion.build(elements = emptyFlow())
-        }
-
         return InlineCompletionSingleSuggestion.build(elements = channelFlow {
             try {
+                currentCallRef.getAndSet(null)?.cancel()
                 val remainingCodeCompletion = REMAINING_CODE_COMPLETION.get(editor)
                 if (remainingCodeCompletion != null && request.event is InlineCompletionEvent.DirectCall) {
                     REMAINING_CODE_COMPLETION.set(editor, null)
@@ -75,19 +71,19 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
                 CompletionProgressNotifier.update(project, true)
 
                 var eventListener = CodeCompletionEventListener(request.editor, this)
+                val infillRequest = InfillRequestUtil.buildInfillRequest(request)
 
                 if (service<ModelSelectionService>().getServiceForFeature(FeatureType.CODE_COMPLETION) == ServiceType.PROXYAI) {
-                    project.service<GrpcClientService>()
-                        .getCodeCompletionAsync(eventListener, request, this)
+                    val grpcClient = project.service<GrpcClientService>()
+                    grpcClient.cancelCodeCompletion()
+                    grpcClient.getCodeCompletionAsync(infillRequest, eventListener, this)
                     return@channelFlow
                 }
 
-                val infillRequest = InfillRequestUtil.buildInfillRequest(request)
-                val call = project.service<CodeCompletionService>().getCodeCompletionAsync(
+                val call = service<CodeCompletionService>().getCodeCompletionAsync(
                     infillRequest,
                     CodeCompletionEventListener(request.editor, this)
                 )
-
                 currentCallRef.set(call)
             } finally {
                 awaitClose { currentCallRef.getAndSet(null)?.cancel() }
@@ -102,7 +98,14 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
     }
 
     override suspend fun getDebounceDelay(request: InlineCompletionRequest): Duration {
-        return 300.toDuration(DurationUnit.MILLISECONDS)
+        val force = request.event is InlineCompletionEvent.DirectCall
+        return if (!force) {
+            val debounceMs = CompletionTracker.calcDebounceTime(request.editor)
+            CompletionTracker.updateLastCompletionRequestTime(request.editor)
+            debounceMs.toDuration(DurationUnit.MILLISECONDS)
+        } else {
+            0.toDuration(DurationUnit.MILLISECONDS)
+        }
     }
 
     override fun isEnabled(event: InlineCompletionEvent): Boolean {
@@ -120,24 +123,15 @@ class DebouncedCodeCompletionProvider : DebouncedInlineCompletionProvider() {
             ServiceType.MISTRAL -> MistralSettings.getCurrentState().isCodeCompletionsEnabled
             ServiceType.INCEPTION -> service<InceptionSettings>().state.codeCompletionsEnabled
             ServiceType.ANTHROPIC,
-            ServiceType.GOOGLE,
-            null -> false
+            ServiceType.GOOGLE -> false
         }
-
-        if (event is LookupInlineCompletionEvent) {
-            return true
-        }
-
-        val hasActiveCompletion =
-            REMAINING_CODE_COMPLETION.get(event.toRequest()?.editor)?.partialCompletion?.isNotEmpty() == true
 
         if (!codeCompletionsEnabled) {
-            return event is InlineCompletionEvent.DocumentChange
-                    && selectedService == ServiceType.PROXYAI
-                    && service<CodeGPTServiceSettings>().state.nextEditsEnabled
-                    && !hasActiveCompletion
+            return false
         }
 
-        return event is InlineCompletionEvent.DocumentChange || hasActiveCompletion
+        return event is LookupInlineCompletionEvent
+                || event is InlineCompletionEvent.DirectCall
+                || event is InlineCompletionEvent.DocumentChange
     }
 }

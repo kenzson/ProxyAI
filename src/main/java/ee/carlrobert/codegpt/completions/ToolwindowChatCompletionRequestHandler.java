@@ -2,28 +2,56 @@ package ee.carlrobert.codegpt.completions;
 
 import com.intellij.openapi.project.Project;
 import ee.carlrobert.codegpt.codecompletions.CompletionProgressNotifier;
+import ee.carlrobert.codegpt.mcp.McpToolCallEventListener;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
+import ee.carlrobert.codegpt.toolwindow.chat.ChatToolWindowTabPanel;
+import ee.carlrobert.codegpt.toolwindow.ui.ResponseMessagePanel;
+import ee.carlrobert.codegpt.toolwindow.ui.mcp.McpApprovalPanel;
+import ee.carlrobert.codegpt.toolwindow.ui.mcp.ToolGroupPanel;
 import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
+import ee.carlrobert.llm.completion.CompletionEventListener;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import okhttp3.sse.EventSource;
 
 public class ToolwindowChatCompletionRequestHandler {
 
   private final Project project;
   private final CompletionResponseEventListener completionResponseEventListener;
-  private EventSource eventSource;
+  private final ChatToolWindowTabPanel tabPanel;
+  private final List<EventSource> activeEventSources = new ArrayList<>();
+  private final AtomicBoolean isCancelled = new AtomicBoolean(false);
+  private ResponseMessagePanel responseMessagePanel;
 
   public ToolwindowChatCompletionRequestHandler(
       Project project,
-      CompletionResponseEventListener completionResponseEventListener) {
+      CompletionResponseEventListener completionResponseEventListener,
+      ChatToolWindowTabPanel tabPanel) {
     this.project = project;
     this.completionResponseEventListener = completionResponseEventListener;
+    this.tabPanel = tabPanel;
+  }
+
+  public void setResponseMessagePanel(ResponseMessagePanel panel) {
+    this.responseMessagePanel = panel;
   }
 
   public void call(ChatCompletionParameters callParameters) {
+    isCancelled.set(false);
+    synchronized (activeEventSources) {
+      activeEventSources.clear();
+    }
+
     try {
-      eventSource = startCall(callParameters);
+      EventSource eventSource = startCall(callParameters);
+      if (eventSource != null) {
+        synchronized (activeEventSources) {
+          activeEventSources.add(eventSource);
+        }
+      }
     } catch (TotalUsageExceededException e) {
       completionResponseEventListener.handleTokensExceeded(
           callParameters.getConversation(),
@@ -34,27 +62,70 @@ public class ToolwindowChatCompletionRequestHandler {
   }
 
   public void cancel() {
-    if (eventSource != null) {
-      eventSource.cancel();
+    isCancelled.set(true);
+
+    synchronized (activeEventSources) {
+      for (EventSource source : activeEventSources) {
+        if (source != null) {
+          source.cancel();
+        }
+      }
+      activeEventSources.clear();
     }
+  }
+
+  public boolean isCancelled() {
+    return isCancelled.get();
+  }
+
+  public void addEventSource(EventSource eventSource) {
+    if (eventSource != null && !isCancelled.get()) {
+      synchronized (activeEventSources) {
+        activeEventSources.add(eventSource);
+      }
+    }
+  }
+
+  private CompletionEventListener<String> getEventListener(
+      ChatCompletionParameters callParameters) {
+    if (callParameters.getMcpTools() != null && !callParameters.getMcpTools().isEmpty()) {
+      return new McpToolCallEventListener(
+          project,
+          callParameters,
+          completionResponseEventListener,
+          panel -> {
+            if (panel instanceof McpApprovalPanel || panel instanceof ToolGroupPanel) {
+              tabPanel.addToolCallApprovalPanel(panel);
+            } else {
+              tabPanel.addToolCallStatusPanel(panel);
+            }
+            return kotlin.Unit.INSTANCE;
+          },
+          this);
+    }
+
+    return new ChatCompletionEventListener(
+        project,
+        callParameters,
+        completionResponseEventListener);
   }
 
   private EventSource startCall(ChatCompletionParameters callParameters) {
     try {
       CompletionProgressNotifier.Companion.update(project, true);
-      var featureType = callParameters.getFeatureType();
       var serviceType =
           ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT);
-      var request = CompletionRequestFactory
-          .getFactoryForFeature(featureType)
+      var eventListener = getEventListener(callParameters);
+      var request = CompletionRequestFactory.getFactory(serviceType)
           .createChatRequest(callParameters);
-      return CompletionRequestService.getInstance().getChatCompletionAsync(
-          request,
-          new ChatCompletionEventListener(
-              project,
-              callParameters,
-              completionResponseEventListener),
-          serviceType);
+
+      try {
+        return CompletionRequestService.getInstance()
+            .getChatCompletionAsync(request, eventListener);
+      } catch (Exception e) {
+        eventListener.onError(new ErrorDetails("Failed to start request: " + e.getMessage()), e);
+        return null;
+      }
     } catch (Throwable ex) {
       handleCallException(ex);
       throw ex;

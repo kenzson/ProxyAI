@@ -229,6 +229,7 @@ class PsiStructureRepository(
                     is PersonaTagDetails -> null
                     is EmptyTagDetails -> null
                     is WebTagDetails -> null
+                    is McpTagDetails -> null
                     is ImageTagDetails -> null
                     is CodeAnalyzeTagDetails -> null
                     is DiagnosticsTagDetails -> null
@@ -257,6 +258,7 @@ class PsiStructureRepository(
                 is PersonaTagDetails -> false
                 is EmptyTagDetails -> false
                 is WebTagDetails -> false
+                is McpTagDetails -> false
                 is ImageTagDetails -> false
                 is CodeAnalyzeTagDetails -> false
                 is DiagnosticsTagDetails -> false
@@ -285,6 +287,7 @@ class PsiStructureRepository(
                     is PersonaTagDetails -> null
                     is EmptyTagDetails -> null
                     is WebTagDetails -> null
+                    is McpTagDetails -> null
                     is ImageTagDetails -> null
                     is CodeAnalyzeTagDetails -> null
                     is DiagnosticsTagDetails -> null

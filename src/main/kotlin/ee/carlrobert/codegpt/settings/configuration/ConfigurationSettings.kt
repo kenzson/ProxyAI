@@ -22,6 +22,7 @@ class ConfigurationSettings :
 }
 
 class ConfigurationSettingsState : BaseState() {
+    var debugModeEnabled by property(false)
     var commitMessagePrompt by string(CoreActionsState.DEFAULT_GENERATE_COMMIT_MESSAGE_PROMPT)
     var maxTokens by property(8192)
     var temperature by property(0.1f) { max(0f, min(1f, it)) }
@@ -58,7 +59,7 @@ class ChatCompletionSettingsState : BaseState() {
 class CodeCompletionSettingsState : BaseState() {
     var treeSitterProcessingEnabled by property(true)
     var gitDiffEnabled by property(true)
-    var collectDependencyStructure by property(true)
+    var collectDependencyStructure by property(false)
     var contextAwareEnabled by property(false)
     var psiStructureAnalyzeDepth by property(2)
 }

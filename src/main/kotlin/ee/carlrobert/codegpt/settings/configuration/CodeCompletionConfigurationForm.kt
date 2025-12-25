@@ -4,7 +4,6 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.PortField
 import com.intellij.ui.components.JBCheckBox
-import com.intellij.ui.components.fields.IntegerField
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.ui.JBUI
 import ee.carlrobert.codegpt.CodeGPTBundle
@@ -23,7 +22,6 @@ class CodeCompletionConfigurationForm {
         CodeGPTBundle.get("configurationConfigurable.section.codeCompletion.collectDependencyStructure.title"),
         service<ConfigurationSettings>().state.codeCompletionSettings.collectDependencyStructure
     )
-
     private val psiStructureAnalyzeDepthField = PortField().apply {
         number = service<ConfigurationSettings>().state.codeCompletionSettings.psiStructureAnalyzeDepth
     }

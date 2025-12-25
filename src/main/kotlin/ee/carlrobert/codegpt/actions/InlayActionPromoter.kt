@@ -10,8 +10,7 @@ import ee.carlrobert.codegpt.actions.editor.InlineEditContextMenuAction
 import ee.carlrobert.codegpt.actions.editor.InlineEditFloatingMenuAction
 import ee.carlrobert.codegpt.inlineedit.AcceptCurrentInlineEditAction
 import ee.carlrobert.codegpt.inlineedit.RejectCurrentInlineEditAction
-import ee.carlrobert.codegpt.predictions.OpenPredictionAction
-import ee.carlrobert.codegpt.predictions.TriggerCustomPredictionAction
+import ee.carlrobert.codegpt.nextedit.TriggerNextEditAction
 
 class InlayActionPromoter : ActionPromoter {
     override fun promote(actions: List<AnAction>, context: DataContext): List<AnAction> {
@@ -30,8 +29,7 @@ class InlayActionPromoter : ActionPromoter {
             actions.filterIsInstance<RejectCurrentInlineEditAction>().takeIf { it.isNotEmpty() }?.let { return it }
         }
 
-        actions.filterIsInstance<TriggerCustomPredictionAction>().takeIf { it.isNotEmpty() }?.let { return it }
-        actions.filterIsInstance<OpenPredictionAction>().takeIf { it.isNotEmpty() }?.let { return it }
+        actions.filterIsInstance<TriggerNextEditAction>().takeIf { it.isNotEmpty() }?.let { return it }
 
         return emptyList()
     }

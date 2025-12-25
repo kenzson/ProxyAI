@@ -88,6 +88,9 @@ dependencies {
     implementation(libs.grpc.protobuf)
     implementation(libs.grpc.stub)
     implementation(libs.grpc.netty.shaded)
+    implementation(libs.protobuf.runtime)
+    implementation(platform(libs.mcp.sdk.bom))
+    implementation(libs.mcp.sdk)
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test"))
 }
@@ -215,7 +218,7 @@ protobuf {
     }
     plugins {
         create("grpc") {
-            artifact = libs.protobuf.java.get().toString()
+            artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.get()}"
         }
     }
     generateProtoTasks {

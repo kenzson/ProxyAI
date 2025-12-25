@@ -18,12 +18,17 @@ import ee.carlrobert.llm.client.llama.LlamaClient;
 import ee.carlrobert.llm.client.mistral.MistralClient;
 import ee.carlrobert.llm.client.ollama.OllamaClient;
 import ee.carlrobert.llm.client.openai.OpenAIClient;
+import ee.carlrobert.llm.client.openai.completion.ErrorDetails;
 import java.net.InetSocketAddress;
 import java.net.Proxy;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 import javax.net.ssl.X509TrustManager;
+import com.intellij.openapi.diagnostic.Logger;
 import okhttp3.Credentials;
 import okhttp3.OkHttpClient;
+import ee.carlrobert.codegpt.settings.configuration.ConfigurationSettings;
+import okhttp3.logging.HttpLoggingInterceptor;
 
 public class CompletionClientProvider {
 
@@ -76,7 +81,8 @@ public class CompletionClientProvider {
   }
 
   public static MistralClient getMistralClient() {
-    return new MistralClient(getCredential(CredentialKey.MistralApiKey.INSTANCE), getDefaultClientBuilder());
+    return new MistralClient(getCredential(CredentialKey.MistralApiKey.INSTANCE),
+        getDefaultClientBuilder());
   }
 
   public static InceptionClient getInceptionClient() {
@@ -104,6 +110,16 @@ public class CompletionClientProvider {
                     advancedSettings.getProxyPassword()))
                 .build());
       }
+    }
+
+    if (ConfigurationSettings.getState().getDebugModeEnabled()) {
+      var ideLogger = Logger.getInstance(CompletionClientProvider.class);
+      var httpLogger = new HttpLoggingInterceptor(message -> ideLogger.info("[HTTP] " + message));
+      httpLogger.setLevel(HttpLoggingInterceptor.Level.BODY);
+      httpLogger.redactHeader("Authorization");
+      httpLogger.redactHeader("X-API-Key");
+      httpLogger.redactHeader("Api-Key");
+      builder.addInterceptor(httpLogger);
     }
 
     return builder

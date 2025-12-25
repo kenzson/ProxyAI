@@ -13,21 +13,17 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.DefaultActionGroup;
 import com.intellij.openapi.application.ApplicationManager;
-import com.intellij.openapi.application.ModalityState;
-import com.intellij.openapi.application.ReadAction;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.fileEditor.FileEditorManager;
 import com.intellij.openapi.options.ShowSettingsUtil;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.VerticalFlowLayout;
-import com.intellij.openapi.util.Disposer;
 import com.intellij.openapi.util.io.FileUtil;
 import com.intellij.openapi.vfs.LocalFileSystem;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.ui.AnimatedIcon;
 import com.intellij.ui.PopupHandler;
 import com.intellij.ui.components.JBLabel;
-import com.intellij.util.concurrency.AppExecutorUtil;
 import com.intellij.util.ui.JBUI;
 import com.intellij.util.ui.components.BorderLayoutPanel;
 import ee.carlrobert.codegpt.CodeGPTBundle;
@@ -38,9 +34,9 @@ import ee.carlrobert.codegpt.events.AnalysisFailedEventDetails;
 import ee.carlrobert.codegpt.events.CodeGPTEvent;
 import ee.carlrobert.codegpt.events.EventDetails;
 import ee.carlrobert.codegpt.events.WebSearchEventDetails;
+import ee.carlrobert.codegpt.settings.GeneralSettingsConfigurable;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
-import ee.carlrobert.codegpt.settings.GeneralSettingsConfigurable;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
 import ee.carlrobert.codegpt.telemetry.TelemetryAction;
 import ee.carlrobert.codegpt.toolwindow.chat.editor.ResponseEditorPanel;
@@ -63,7 +59,6 @@ import ee.carlrobert.codegpt.ui.ThoughtProcessPanel;
 import ee.carlrobert.codegpt.ui.UIUtil;
 import ee.carlrobert.codegpt.ui.hover.PsiLinkHoverPreview;
 import ee.carlrobert.codegpt.util.EditorUtil;
-import ee.carlrobert.codegpt.util.MarkdownUtil;
 import java.awt.BorderLayout;
 import java.util.Objects;
 import java.util.stream.Stream;
@@ -84,6 +79,7 @@ public class ChatMessageResponseBody extends JPanel {
   private final Disposable parentDisposable;
   private final SseMessageParser streamOutputParser;
   private final boolean readOnly;
+  private final boolean compact;
   private final DefaultListModel<WebSearchEventDetails> webpageListModel = new DefaultListModel<>();
   private final WebpageList webpageList = new WebpageList(webpageListModel);
   private final ResponseBodyProgressPanel progressPanel = new ResponseBodyProgressPanel();
@@ -104,13 +100,14 @@ public class ChatMessageResponseBody extends JPanel {
         .withBorder(JBUI.Borders.empty(4, 0));
   }
 
-  public ChatMessageResponseBody(Project project, Disposable parentDisposable) {
-    this(project, false, false, false, false, parentDisposable);
+  public ChatMessageResponseBody(Project project, boolean compact, Disposable parentDisposable) {
+    this(project, false, compact, false, false, false, parentDisposable);
   }
 
   public ChatMessageResponseBody(
       Project project,
       boolean readOnly,
+      boolean compact,
       boolean webSearchIncluded,
       boolean withProgress,
       boolean withLoading,
@@ -119,6 +116,7 @@ public class ChatMessageResponseBody extends JPanel {
     this.parentDisposable = parentDisposable;
     this.streamOutputParser = new SseMessageParser();
     this.readOnly = readOnly;
+    this.compact = compact;
 
     setLayout(new BorderLayout());
     setOpaque(false);
@@ -129,7 +127,8 @@ public class ChatMessageResponseBody extends JPanel {
     loadingLabel.setVisible(withLoading);
     add(loadingLabel, BorderLayout.SOUTH);
 
-    if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) == ServiceType.PROXYAI) {
+    if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT)
+        == ServiceType.PROXYAI) {
       if (withProgress) {
         contentPanel.add(progressPanel);
       }
@@ -156,6 +155,13 @@ public class ChatMessageResponseBody extends JPanel {
 
   public void stopLoading() {
     loadingLabel.setVisible(false);
+  }
+
+  public void addToolStatusPanel(JPanel panel) {
+    currentlyProcessedTextPane = null;
+    currentlyProcessedEditorPanel = null;
+    streamOutputParser.clear();
+    contentPanel.add(panel);
   }
 
   public void updateMessage(String partialMessage) {
@@ -224,6 +230,15 @@ public class ChatMessageResponseBody extends JPanel {
     if (currentlyProcessedTextPane != null) {
       currentlyProcessedTextPane.getCaret().setVisible(false);
     }
+  }
+
+  public void finishThinking() {
+    ApplicationManager.getApplication().invokeLater(() -> {
+      var thoughtProcessPanel = getExistingThoughtProcessPanel();
+      if (thoughtProcessPanel != null && !thoughtProcessPanel.isFinished()) {
+        thoughtProcessPanel.setFinished();
+      }
+    });
   }
 
   public void clear() {
@@ -380,7 +395,7 @@ public class ChatMessageResponseBody extends JPanel {
     hideCaret();
     currentlyProcessedTextPane = null;
     currentlyProcessedEditorPanel =
-        new ResponseEditorPanel(project, item, readOnly, parentDisposable);
+        new ResponseEditorPanel(project, item, readOnly, compact, parentDisposable);
     contentPanel.add(currentlyProcessedEditorPanel);
     contentPanel.revalidate();
     contentPanel.repaint();

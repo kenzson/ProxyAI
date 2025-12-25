@@ -6,8 +6,10 @@ import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.util.EditWindowFormatter.FormatResult
 import ee.carlrobert.codegpt.util.EditorUtil
 import ee.carlrobert.llm.client.inception.request.InceptionApplyRequest
+import ee.carlrobert.llm.client.inception.request.InceptionNextEditRequest
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionRequest
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage
 import ee.carlrobert.llm.completion.CompletionRequest
@@ -28,8 +30,9 @@ class InceptionRequestFactory : BaseRequestFactory() {
 
     override fun createInlineEditRequest(params: InlineEditCompletionParameters): OpenAIChatCompletionRequest {
         val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.INLINE_EDIT)
-        val prepared = prepareInlineEditPrompts(params)
-        val messages = OpenAIRequestFactory.buildInlineEditMessages(prepared, params.conversation)
+        val systemPrompt = prepareInlineEditSystemPrompt(params)
+        val messages =
+            OpenAIRequestFactory.buildInlineEditMessages(systemPrompt, params.conversation)
         return OpenAIChatCompletionRequest.Builder(messages)
             .setModel(model)
             .setStream(true)
@@ -43,11 +46,17 @@ class InceptionRequestFactory : BaseRequestFactory() {
 
         return InceptionApplyRequest.Builder()
             .setModel(model)
-            .setMessages(
-                listOf(
-                    OpenAIChatCompletionStandardMessage("user", prompt)
-                )
-            )
+            .setMessages(listOf(OpenAIChatCompletionStandardMessage("user", prompt)))
+            .build()
+    }
+
+    override fun createNextEditRequest(params: NextEditParameters, formatResult: FormatResult): InceptionNextEditRequest {
+        val model = ModelSelectionService.getInstance().getModelForFeature(FeatureType.NEXT_EDIT)
+        val content = composeNextEditMessage(params, formatResult)
+        val message = OpenAIChatCompletionStandardMessage("user", content)
+        return InceptionNextEditRequest.Builder()
+            .setModel(model)
+            .setMessages(listOf(message))
             .build()
     }
 
@@ -103,4 +112,3 @@ class InceptionRequestFactory : BaseRequestFactory() {
             .build()
     }
 }
-

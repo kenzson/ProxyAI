@@ -5,6 +5,7 @@ import com.intellij.icons.AllIcons.Actions.Close
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.vcs.FileStatusManager
 import com.intellij.ui.components.JBLabel
 import com.intellij.util.IconUtil
 import com.intellij.util.ui.JBUI
@@ -20,7 +21,12 @@ abstract class TagPanel(
     private val shouldPreventDeselection: Boolean = true,
     protected val project: Project,
 ) : JToggleButton() {
-    private val label = TagLabel(tagDetails.name, tagDetails.icon, tagDetails.selected)
+    private val label = TagLabel(
+        tagDetails.name,
+        tagDetails.icon,
+        tagDetails.selected,
+        getForegroundColor(tagDetails)
+    )
     private val closeButton = CloseButton {
         isVisible = isSelected && tagDetails.isRemovable
         onClose()
@@ -35,9 +41,27 @@ abstract class TagPanel(
 
     abstract fun onClose()
 
+    private fun getForegroundColor(tagDetails: TagDetails): Color? {
+        return getVirtualFile(tagDetails)?.let { file ->
+            FileStatusManager.getInstance(project).getStatus(file).color
+        }
+    }
+
+    private fun getVirtualFile(tagDetails: TagDetails) = when (tagDetails) {
+        is EditorTagDetails -> tagDetails.virtualFile
+        is FileTagDetails -> tagDetails.virtualFile
+        is SelectionTagDetails -> tagDetails.virtualFile
+        is EditorSelectionTagDetails -> tagDetails.virtualFile
+        else -> null
+    }
+
     fun update(text: String, icon: Icon? = null) {
+        val foregroundColor = getVirtualFile(tagDetails)?.let { file ->
+            FileStatusManager.getInstance(project).getStatus(file).color
+        }
+
         closeButton.isVisible = tagDetails.isRemovable
-        label.update(text, icon, isSelected)
+        label.update(text, icon, isSelected, foregroundColor)
         tagDetails.getTooltipText()?.let { tooltip ->
             val relativeTooltipText = toProjectRelative(tooltip)
             this.toolTipText = relativeTooltipText
@@ -49,11 +73,17 @@ abstract class TagPanel(
 
     override fun getPreferredSize(): Dimension {
         val closeButtonWidth = if (closeButton.isVisible) closeButton.preferredSize.width else 0
+        val additionalWidth = getAdditionalWidth()
         return Dimension(
-            label.preferredSize.width + closeButtonWidth + insets.left + insets.right,
+            label.preferredSize.width + closeButtonWidth + additionalWidth + insets.left + insets.right,
             JBUI.scale(20)
         )
     }
+    
+    /**
+     * Override this method in subclasses to add additional width for custom components
+     */
+    protected open fun getAdditionalWidth(): Int = 0
 
     override fun paintComponent(g: Graphics) {
         super.paintComponent(g)
@@ -81,7 +111,7 @@ abstract class TagPanel(
         }
 
         add(label, gbc)
-        gbc.gridx = 1
+        gbc.gridx = 2
         add(closeButton, gbc)
 
         label.inheritsPopupMenu = true
@@ -137,26 +167,33 @@ abstract class TagPanel(
     private class TagLabel(
         name: String,
         icon: Icon? = null,
-        selected: Boolean = true
+        selected: Boolean = true,
+        foregroundColor: Color? = null
     ) : JBLabel(name) {
 
         init {
-            update(name, icon, selected)
+            update(name, icon, selected, foregroundColor)
         }
 
         fun update(selected: Boolean) {
             update(text, icon, selected)
         }
 
-        fun update(name: String, icon: Icon? = null, selected: Boolean = true) {
+        fun update(
+            name: String,
+            icon: Icon? = null,
+            selected: Boolean = true,
+            foregroundColor: Color? = null
+        ) {
             text = name
             cursor = Cursor(Cursor.HAND_CURSOR)
             font = JBUI.Fonts.miniFont()
-            foreground = if (selected) {
-                service<EditorColorsManager>().globalScheme.defaultForeground
-            } else {
-                JBUI.CurrentTheme.Label.disabledForeground(false)
-            }
+            foreground = foregroundColor
+                ?: if (selected) {
+                    service<EditorColorsManager>().globalScheme.defaultForeground
+                } else {
+                    JBUI.CurrentTheme.Label.disabledForeground(false)
+                }
             icon?.let {
                 this.icon = IconUtil.scale(it, null, 0.65f)
             }

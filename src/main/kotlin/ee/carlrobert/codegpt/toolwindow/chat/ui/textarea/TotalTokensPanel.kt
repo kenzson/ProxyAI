@@ -173,6 +173,11 @@ class TotalTokensPanel(
     private fun createTokenDetails(conversation: Conversation, highlightedText: String?): TotalTokensDetails {
         val tokenDetails = TotalTokensDetails(tokenService.countTextTokens(PromptsSettings.getSelectedPersonaSystemPrompt()))
         tokenDetails.conversationTokens = encodingManager.countConversationTokens(conversation)
+
+        val mcpTokens = encodingManager.countMcpToolTokens(conversation)
+        tokenDetails.mcpToolInputTokens = mcpTokens.inputTokens
+        tokenDetails.mcpToolOutputTokens = mcpTokens.outputTokens
+
         if (highlightedText != null) {
             tokenDetails.highlightedTokens = tokenService.countTextTokens(highlightedText)
         }
@@ -186,7 +191,9 @@ class TotalTokensPanel(
             "Input Tokens" to details.userPromptTokens,
             "Highlighted Tokens" to details.highlightedTokens,
             "Referenced Files Tokens" to details.referencedFilesTokens,
-            "Dependency Structure Tokens" to details.psiTokens
+            "Dependency Structure Tokens" to details.psiTokens,
+            "MCP Tool Input Tokens" to details.mcpToolInputTokens,
+            "MCP Tool Output Tokens" to details.mcpToolOutputTokens
         ))
         return items.entries.stream()
             .map { (k, v) -> "<p style=\"margin: 0; padding: 0;\"><small>$k: <strong>$v</strong></small></p>" }

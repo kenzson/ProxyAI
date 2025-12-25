@@ -2,29 +2,60 @@ package ee.carlrobert.codegpt.ui.textarea.lookup.group
 
 import com.intellij.codeInsight.lookup.LookupElement
 import com.intellij.codeInsight.lookup.LookupElementPresentation
-import com.intellij.icons.AllIcons
-import com.intellij.openapi.util.IconLoader
-import com.intellij.util.ui.JBUI
+import com.intellij.openapi.components.service
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
+import ee.carlrobert.codegpt.settings.mcp.McpSettings
+import ee.carlrobert.codegpt.settings.service.FeatureType
+import ee.carlrobert.codegpt.settings.service.ModelSelectionService
+import ee.carlrobert.codegpt.settings.service.ServiceType.CUSTOM_OPENAI
+import ee.carlrobert.codegpt.settings.service.ServiceType.OPENAI
+import ee.carlrobert.codegpt.ui.textarea.header.tag.McpTagDetails
+import ee.carlrobert.codegpt.ui.textarea.header.tag.TagManager
 import ee.carlrobert.codegpt.ui.textarea.lookup.LookupActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.mcp.AddMcpServerActionItem
+import ee.carlrobert.codegpt.ui.textarea.lookup.action.mcp.McpServerActionItem
 import javax.swing.Icon
 
-class MCPGroupItem : AbstractLookupGroupItem() {
+class MCPGroupItem(private val tagManager: TagManager) : AbstractLookupGroupItem() {
 
     override val displayName: String = CodeGPTBundle.get("suggestionGroupItem.mcp.displayName")
     override val icon: Icon = Icons.MCP
+    override val enabled: Boolean = isEnabled()
+
+    fun isEnabled(): Boolean {
+        val serviceType = service<ModelSelectionService>().getServiceForFeature(FeatureType.CHAT)
+        return serviceType == OPENAI || serviceType == CUSTOM_OPENAI
+    }
 
     override fun setPresentation(element: LookupElement, presentation: LookupElementPresentation) {
         super.setPresentation(element, presentation)
-
-        presentation.icon = IconLoader.getDisabledIcon(icon)
-        presentation.isTypeGrayed = true
-        presentation.setTypeText("", IconLoader.getDisabledIcon(AllIcons.Icons.Ide.NextStep))
-        presentation.itemTextForeground = JBUI.CurrentTheme.Label.disabledForeground()
     }
 
     override suspend fun getLookupItems(searchText: String): List<LookupActionItem> {
-        return emptyList()
+        val mcpSettings = service<McpSettings>()
+        val attachedServerIds = tagManager.getTags()
+            .filterIsInstance<McpTagDetails>()
+            .map { it.serverId }
+            .toSet()
+
+        val items = mutableListOf<LookupActionItem>()
+
+        items.add(AddMcpServerActionItem())
+
+        val availableServers = mcpSettings.state.servers
+            .filter { serverDetails ->
+                !attachedServerIds.contains(serverDetails.id.toString()) &&
+                        (searchText.isEmpty() || serverDetails.name?.contains(
+                            searchText,
+                            true
+                        ) == true)
+            }
+            .map { McpServerActionItem(it) }
+            .take(9) // Take 9 to leave room for AddMcpServerActionItem
+
+        items.addAll(availableServers)
+
+        return items
     }
 }

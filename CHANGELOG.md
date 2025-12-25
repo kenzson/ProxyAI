@@ -6,6 +6,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.8-241.1] - 2025-11-17
+
+### Added
+
+- Inline Edit quick question in the editor
+- Debug logs support with toggle in Advanced settings
+
+### Fixed
+
+- Re-enabled improved diff editor fragment for Next Edits
+
+## [3.6.7-241.1] - 2025-11-13
+
+### Improved
+
+- Autocomplete and Next-Edit suggestions experience
+
+### Added
+
+- Colorful file tags based on its state in VCS (modified/added/removed)
+
+## [3.6.6-241.1] - 2025-10-29
+
+### Fixed
+
+- gRPC request timeouts during autocompletion and next-edits
+- Order of search tags in the prompt lookup
+- Custom OpenAI serialization issues [#1142](https://github.com/carlrobertoh/ProxyAI/issues/1142), [#1151](https://github.com/carlrobertoh/ProxyAI/issues/1151)
+
 ## [3.6.5-241.1] - 2025-10-22
 
 ### Added
@@ -1181,7 +1210,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `OPENAI_API_KEY` persistence, key is saved in the OS password safe from now on
 
-[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.5-241.1...HEAD
+[Unreleased]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.8-241.1...HEAD
+[3.6.8-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.7-241.1...v3.6.8-241.1
+[3.6.7-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.6-241.1...v3.6.7-241.1
+[3.6.6-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.5-241.1...v3.6.6-241.1
 [3.6.5-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.4-241.1...v3.6.5-241.1
 [3.6.4-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.3-241.1...v3.6.4-241.1
 [3.6.3-241.1]: https://github.com/carlrobertoh/ProxyAI/compare/v3.6.2-241.1...v3.6.3-241.1

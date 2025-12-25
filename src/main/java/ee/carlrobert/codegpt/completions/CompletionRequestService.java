@@ -1,23 +1,15 @@
 package ee.carlrobert.codegpt.completions;
 
-import static ee.carlrobert.codegpt.CodeGPTKeys.CODEGPT_USER_DETAILS;
-import static ee.carlrobert.codegpt.settings.service.ServiceType.INCEPTION;
-import static ee.carlrobert.codegpt.settings.service.ServiceType.PROXYAI;
-
 import com.intellij.openapi.application.ApplicationManager;
 import com.intellij.openapi.components.Service;
-import com.intellij.openapi.diagnostic.Logger;
 import ee.carlrobert.codegpt.completions.factory.CustomOpenAIRequest;
 import ee.carlrobert.codegpt.credentials.CredentialsStore;
 import ee.carlrobert.codegpt.credentials.CredentialsStore.CredentialKey;
 import ee.carlrobert.codegpt.settings.service.FeatureType;
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService;
 import ee.carlrobert.codegpt.settings.service.ServiceType;
-import ee.carlrobert.codegpt.util.ApplicationUtil;
-import ee.carlrobert.codegpt.util.file.FileUtil;
 import ee.carlrobert.llm.client.DeserializationUtil;
 import ee.carlrobert.llm.client.anthropic.completion.ClaudeCompletionRequest;
-import ee.carlrobert.llm.client.codegpt.request.AutoApplyRequest;
 import ee.carlrobert.llm.client.codegpt.request.InlineEditRequest;
 import ee.carlrobert.llm.client.codegpt.request.chat.ChatCompletionRequest;
 import ee.carlrobert.llm.client.google.completion.GoogleCompletionRequest;
@@ -41,8 +33,6 @@ import okhttp3.sse.EventSources;
 
 @Service
 public final class CompletionRequestService {
-
-  private static final Logger LOG = Logger.getInstance(CompletionRequestService.class);
 
   private CompletionRequestService() {
   }
@@ -114,8 +104,8 @@ public final class CompletionRequestService {
 
   public EventSource getChatCompletionAsync(
       CompletionRequest request,
-      CompletionEventListener<String> eventListener,
-      ServiceType serviceType) {
+      CompletionEventListener<String> eventListener) {
+    var serviceType = ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT);
     return getChatCompletionAsync(request, eventListener, serviceType, FeatureType.CHAT);
   }
 
@@ -231,7 +221,7 @@ public final class CompletionRequestService {
     }
   }
 
-  private static boolean isRequestAllowed(ServiceType serviceType) {
+  public static boolean isRequestAllowed(ServiceType serviceType) {
     return switch (serviceType) {
       case OPENAI -> CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.OpenaiApiKey.INSTANCE);
       case ANTHROPIC -> CredentialsStore.INSTANCE.isCredentialSet(

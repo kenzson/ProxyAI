@@ -5,8 +5,6 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionPlaces
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
-import com.intellij.openapi.application.ModalityState
-import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.invokeLater
 import com.intellij.openapi.application.runInEdt
 import com.intellij.openapi.components.service
@@ -18,19 +16,18 @@ import com.intellij.openapi.observable.properties.AtomicBooleanProperty
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.dsl.builder.AlignX
 import com.intellij.ui.dsl.builder.RightGap
 import com.intellij.ui.dsl.builder.panel
 import com.intellij.util.IconUtil
-import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.AsyncProcessIcon
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.components.BorderLayoutPanel
 import ee.carlrobert.codegpt.CodeGPTBundle
 import ee.carlrobert.codegpt.Icons
-import ee.carlrobert.codegpt.ReferencedFile
-import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.models.ModelRegistry
+import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
@@ -38,6 +35,7 @@ import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.ModelComboBoxAction
 import ee.carlrobert.codegpt.toolwindow.chat.ui.textarea.TotalTokensPanel
 import ee.carlrobert.codegpt.ui.IconActionButton
 import ee.carlrobert.codegpt.ui.components.InlineEditChips
+import ee.carlrobert.codegpt.ui.components.BadgeChip
 import ee.carlrobert.codegpt.ui.dnd.FileDragAndDrop
 import ee.carlrobert.codegpt.ui.textarea.header.UserInputHeaderPanel
 import ee.carlrobert.codegpt.ui.textarea.header.tag.*
@@ -59,12 +57,13 @@ class UserInputPanel @JvmOverloads constructor(
     private val totalTokensPanel: TotalTokensPanel,
     private val parentDisposable: Disposable,
     featureType: FeatureType,
-    private val tagManager: TagManager,
+    val tagManager: TagManager,
     private val onSubmit: (String) -> Unit,
     private val onStop: () -> Unit,
     private val onAcceptAll: (() -> Unit)? = null,
     private val onRejectAll: (() -> Unit)? = null,
-    private val showModeSelector: Boolean = true,
+    private val onApply: (() -> Unit)? = null,
+    private val getMarkdownContent: (() -> String)? = null,
     withRemovableSelectedEditorTag: Boolean = true,
 ) : BorderLayoutPanel() {
 
@@ -76,7 +75,6 @@ class UserInputPanel @JvmOverloads constructor(
         tagManager: TagManager,
         onSubmit: (String) -> Unit,
         onStop: () -> Unit,
-        showModeSelector: Boolean,
         withRemovableSelectedEditorTag: Boolean
     ) : this(
         project,
@@ -88,7 +86,8 @@ class UserInputPanel @JvmOverloads constructor(
         onStop,
         null,
         null,
-        showModeSelector,
+        null,
+        null,
         withRemovableSelectedEditorTag
     )
 
@@ -96,6 +95,9 @@ class UserInputPanel @JvmOverloads constructor(
         private const val CORNER_RADIUS = 16
     }
 
+    private val quickQuestionCheckbox = JBCheckBox(CodeGPTBundle.get("userInput.quickQuestion"), true).apply {
+        isOpaque = false
+    }
     private var chatMode: ChatMode = ChatMode.ASK
     private val disposableCoroutineScope = DisposableCoroutineScope()
     private val promptTextField =
@@ -109,7 +111,7 @@ class UserInputPanel @JvmOverloads constructor(
             onFilesDropped = { files ->
                 includeFiles(files.toMutableList())
             },
-            featureType = featureType
+            featureType = featureType,
         )
     private val userInputHeaderPanel =
         UserInputHeaderPanel(
@@ -117,11 +119,16 @@ class UserInputPanel @JvmOverloads constructor(
             tagManager,
             totalTokensPanel,
             promptTextField,
-            withRemovableSelectedEditorTag
+            withRemovableSelectedEditorTag,
+            onApply,
+            getMarkdownContent
         )
 
     private var footerPanelRef: JPanel? = null
 
+    private val applyChip = onApply?.let { BadgeChip(CodeGPTBundle.get("shared.apply"), InlineEditChips.GREEN, it) }?.apply {
+        isVisible = false
+    }
     private val acceptChip =
         InlineEditChips.acceptAll { onAcceptAll?.invoke() }.apply { isVisible = false }
     private val rejectChip =
@@ -129,7 +136,7 @@ class UserInputPanel @JvmOverloads constructor(
     private var inlineEditControls: List<JComponent> = listOf(acceptChip, rejectChip)
 
     private val thinkingIcon = AsyncProcessIcon("inline-edit-thinking").apply { isVisible = false }
-    private val thinkingLabel = javax.swing.JLabel("Thinking…").apply {
+    private val thinkingLabel = javax.swing.JLabel(CodeGPTBundle.get("shared.thinking")).apply {
         foreground = service<EditorColorsManager>().globalScheme.defaultForeground
         isVisible = false
     }
@@ -177,11 +184,10 @@ class UserInputPanel @JvmOverloads constructor(
     val text: String
         get() = promptTextField.text
 
+    fun isQuickQuestionEnabled(): Boolean = quickQuestionCheckbox.isSelected
     fun getChatMode(): ChatMode = chatMode
+    fun setChatMode(mode: ChatMode) { chatMode = mode }
 
-    fun setChatMode(mode: ChatMode) {
-        chatMode = mode
-    }
 
     init {
         setupDisposables(parentDisposable)
@@ -450,13 +456,11 @@ class UserInputPanel @JvmOverloads constructor(
         }
         modelComboBoxComponent = modelComboBox
 
-        val searchReplaceToggle = if (showModeSelector) {
+        val searchReplaceToggle = if (featureType == FeatureType.CHAT) {
             SearchReplaceToggleAction(this).createCustomComponent(ActionPlaces.UNKNOWN).apply {
                 cursor = Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
             }
-        } else {
-            null
-        }
+        } else null
         searchReplaceToggleComponent = searchReplaceToggle
 
         val pnl = panel {
@@ -468,9 +472,11 @@ class UserInputPanel @JvmOverloads constructor(
                             cell(thinkingPanel).gap(RightGap.SMALL)
                             cell(acceptChip).gap(RightGap.SMALL)
                             cell(rejectChip).gap(RightGap.SMALL)
-                            if (showModeSelector) {
-                                cell(createToolbarSeparator()).gap(RightGap.SMALL)
-                                cell(searchReplaceToggle!!)
+                            cell(createToolbarSeparator()).gap(RightGap.SMALL)
+                            if (featureType == FeatureType.INLINE_EDIT) {
+                                cell(quickQuestionCheckbox)
+                            } else if (searchReplaceToggle != null) {
+                                cell(searchReplaceToggle)
                             }
                         }
                     }.align(AlignX.LEFT)
@@ -478,6 +484,7 @@ class UserInputPanel @JvmOverloads constructor(
                 {
                     panel {
                         row {
+                            if (applyChip != null) cell(applyChip).gap(RightGap.SMALL)
                             cell(submitButton).gap(RightGap.SMALL)
                             cell(stopButton)
                         }
@@ -493,7 +500,15 @@ class UserInputPanel @JvmOverloads constructor(
         repaint()
     }
 
-    fun setThinkingVisible(visible: Boolean, text: String = "Thinking…") {
+    fun setApplyVisible(visible: Boolean) {
+        userInputHeaderPanel.setApplyVisible(visible)
+    }
+
+    fun setApplyEnabled(enabled: Boolean) {
+        userInputHeaderPanel.setApplyEnabled(enabled)
+    }
+
+    fun setThinkingVisible(visible: Boolean, text: String = CodeGPTBundle.get("shared.thinking")) {
         thinkingLabel.text = text
         thinkingIcon.isVisible = visible
         thinkingLabel.isVisible = visible

@@ -14,7 +14,9 @@ import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionDe
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionMessage;
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIChatCompletionStandardMessage;
 import ee.carlrobert.llm.client.openai.completion.request.OpenAIMessageTextContent;
+import ee.carlrobert.llm.client.openai.completion.response.ToolCall;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 @Service
@@ -40,6 +42,65 @@ public final class EncodingManager {
         .mapToInt(
             message -> countTokens(message.getPrompt()) + countTokens(message.getResponse()))
         .sum();
+  }
+
+  public McpToolTokens countMcpToolTokens(Conversation conversation) {
+    if (conversation == null) {
+      return new McpToolTokens(0, 0);
+    }
+
+    return conversation.getMessages().stream()
+        .reduce(new McpToolTokens(0, 0),
+          (tokens, message) -> {
+            int inputTokens = 0;
+            int outputTokens = 0;
+
+            List<ToolCall> toolCalls = message.getToolCalls();
+            if (toolCalls != null) {
+              for (ToolCall toolCall : toolCalls) {
+                if (toolCall.getFunction() != null && toolCall.getFunction().getArguments() != null) {
+                  inputTokens += countTokens(toolCall.getFunction().getArguments());
+                }
+              }
+            }
+
+            Map<String, String> toolCallResults = message.getToolCallResults();
+            if (toolCallResults != null) {
+              for (String result : toolCallResults.values()) {
+                if (result != null) {
+                  outputTokens += countTokens(result);
+                }
+              }
+            }
+
+            return new McpToolTokens(
+              tokens.getInputTokens() + inputTokens,
+              tokens.getOutputTokens() + outputTokens
+            );
+          },
+          (tokens1, tokens2) -> new McpToolTokens(
+            tokens1.getInputTokens() + tokens2.getInputTokens(),
+            tokens1.getOutputTokens() + tokens2.getOutputTokens()
+          )
+        );
+  }
+
+  public static class McpToolTokens {
+    private final int inputTokens;
+    private final int outputTokens;
+
+    public McpToolTokens(int inputTokens, int outputTokens) {
+      this.inputTokens = inputTokens;
+      this.outputTokens = outputTokens;
+    }
+
+    public int getInputTokens() {
+      return inputTokens;
+    }
+
+    public int getOutputTokens() {
+      return outputTokens;
+    }
   }
 
   public int countMessageTokens(OpenAIChatCompletionMessage message) {

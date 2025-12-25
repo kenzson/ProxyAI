@@ -8,6 +8,8 @@ public class TotalTokensDetails {
   private int highlightedTokens;
   private int referencedFilesTokens;
   private int psiTokens;
+  private int mcpToolInputTokens;
+  private int mcpToolOutputTokens;
 
   public TotalTokensDetails(int systemPromptTokens) {
     this.systemPromptTokens = systemPromptTokens;
@@ -57,12 +59,30 @@ public class TotalTokensDetails {
     return psiTokens;
   }
 
+  public void setMcpToolInputTokens(int mcpToolInputTokens) {
+    this.mcpToolInputTokens = mcpToolInputTokens;
+  }
+
+  public int getMcpToolInputTokens() {
+    return mcpToolInputTokens;
+  }
+
+  public void setMcpToolOutputTokens(int mcpToolOutputTokens) {
+    this.mcpToolOutputTokens = mcpToolOutputTokens;
+  }
+
+  public int getMcpToolOutputTokens() {
+    return mcpToolOutputTokens;
+  }
+
   public int getTotal() {
     return systemPromptTokens
         + conversationTokens
         + userPromptTokens
         + highlightedTokens
         + referencedFilesTokens
-        + psiTokens;
+        + psiTokens
+        + mcpToolInputTokens
+        + mcpToolOutputTokens;
   }
 }

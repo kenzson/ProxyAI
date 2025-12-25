@@ -36,7 +36,8 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
   public void displayLandingView(JComponent landingView) {
     clearAll();
     add(landingView);
-    if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT) == ServiceType.PROXYAI
+    if (ModelSelectionService.getInstance().getServiceForFeature(FeatureType.CHAT)
+        == ServiceType.PROXYAI
         && !CredentialsStore.INSTANCE.isCredentialSet(CredentialKey.CodeGptApiKey.INSTANCE)) {
 
       var panel = new ResponseMessagePanel();
@@ -98,5 +99,13 @@ public class ChatToolWindowScrollablePanel extends ScrollablePanel {
   public void update() {
     repaint();
     revalidate();
+  }
+
+  public JPanel getLastComponent() {
+    var comp = getComponents()[getComponentCount() - 1];
+    if (comp instanceof JPanel panel) {
+      return panel;
+    }
+    return null;
   }
 }

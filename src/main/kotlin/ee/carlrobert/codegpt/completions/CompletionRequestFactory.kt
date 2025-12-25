@@ -1,27 +1,46 @@
 package ee.carlrobert.codegpt.completions
 
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.LocalFileSystem
+import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.MAX_RECENTLY_VIEWED_SNIPPETS
+import ee.carlrobert.codegpt.completions.CompletionRequestFactory.Companion.RECENTLY_VIEWED_LINES
 import ee.carlrobert.codegpt.completions.factory.*
+import ee.carlrobert.codegpt.conversations.message.Message
+import ee.carlrobert.codegpt.nextedit.NextEditPromptUtil
 import ee.carlrobert.codegpt.psistructure.ClassStructureSerializer
+import ee.carlrobert.codegpt.settings.configuration.ChatMode
 import ee.carlrobert.codegpt.settings.prompts.CoreActionsState
 import ee.carlrobert.codegpt.settings.prompts.FilteredPromptsService
+import ee.carlrobert.codegpt.settings.prompts.PersonaDetails
 import ee.carlrobert.codegpt.settings.prompts.PromptsSettings
 import ee.carlrobert.codegpt.settings.service.FeatureType
 import ee.carlrobert.codegpt.settings.service.ModelSelectionService
 import ee.carlrobert.codegpt.settings.service.ServiceType
+import ee.carlrobert.codegpt.util.EditWindowFormatter.FormatResult
 import ee.carlrobert.codegpt.util.EditorUtil
+import ee.carlrobert.codegpt.util.GitUtil
 import ee.carlrobert.codegpt.util.file.FileUtil
 import ee.carlrobert.llm.completion.CompletionRequest
 
 interface CompletionRequestFactory {
     fun createChatRequest(params: ChatCompletionParameters): CompletionRequest
     fun createInlineEditRequest(params: InlineEditCompletionParameters): CompletionRequest
+    fun createInlineEditQuestionRequest(parameters: ChatCompletionParameters): CompletionRequest
     fun createAutoApplyRequest(params: AutoApplyParameters): CompletionRequest
     fun createCommitMessageRequest(params: CommitMessageCompletionParameters): CompletionRequest
     fun createLookupRequest(params: LookupCompletionParameters): CompletionRequest
+    fun createNextEditRequest(
+        params: NextEditParameters,
+        formatResult: FormatResult
+    ): CompletionRequest {
+        throw UnsupportedOperationException("Next Edit is not supported by this provider")
+    }
 
     companion object {
+        const val MAX_RECENTLY_VIEWED_SNIPPETS = 3
+        const val RECENTLY_VIEWED_LINES = 200
+
         @JvmStatic
         fun getFactory(serviceType: ServiceType): CompletionRequestFactory {
             return when (serviceType) {
@@ -46,21 +65,58 @@ interface CompletionRequestFactory {
 }
 
 abstract class BaseRequestFactory : CompletionRequestFactory {
+
     companion object {
         private const val LOOKUP_MAX_TOKENS = 512
         private const val AUTO_APPLY_MAX_TOKENS = 8192
         private const val DEFAULT_MAX_TOKENS = 4096
     }
 
-    data class InlineEditPrompts(val systemPrompt: String, val userPrompt: String)
+    override fun createInlineEditQuestionRequest(parameters: ChatCompletionParameters): CompletionRequest {
+        val systemPrompt = """
+            You are an Inline Edit assistant for a single open file.
+            Respond in two parts:
 
-    protected fun prepareInlineEditPrompts(params: InlineEditCompletionParameters): InlineEditPrompts {
+            1) Explanation (concise):
+               - 3–5 short bullets max.
+               - Summarize what will change and why.
+               - Reference functions/classes by name. Do not paste full files.
+
+            2) Update Snippet(s):
+               - Provide ONLY partial changes as one or more fenced code blocks using triple backticks with the correct language (```python, ```kotlin, etc.).
+               - Do NOT include any special tags.
+               - Use minimal necessary context; indicate gaps with language-appropriate comments like "// ... existing code ..." or "# ... existing code ...".
+               - Include only changed/new lines with at most 1–3 lines of surrounding context when needed.
+               - Prefer stable anchors (function/class signatures, imports) to locate insertion points.
+               - Never output entire files or unrelated edits.
+        """.trimIndent()
+
+        val userPrompt = getPromptWithFilesContext(parameters)
+
+        val newParams = ChatCompletionParameters
+            .builder(parameters.conversation, Message(userPrompt))
+            .sessionId(parameters.sessionId)
+            .conversationType(parameters.conversationType)
+            .retry(parameters.retry)
+            .imageDetails(parameters.imageDetails)
+            .history(parameters.history)
+            .referencedFiles(parameters.referencedFiles)
+            .personaDetails(PersonaDetails(-1L, "Inline Edit Guidance", systemPrompt))
+            .psiStructure(parameters.psiStructure)
+            .project(parameters.project)
+            .chatMode(ChatMode.ASK)
+            .featureType(FeatureType.INLINE_EDIT)
+            .build()
+
+        return createChatRequest(newParams)
+    }
+
+    protected fun prepareInlineEditSystemPrompt(params: InlineEditCompletionParameters): String {
         val language = params.fileExtension ?: "txt"
         val filePath = params.filePath ?: "untitled"
         var systemPrompt =
             service<PromptsSettings>().state.coreActions.inlineEdit.instructions
                 ?: CoreActionsState.DEFAULT_INLINE_EDIT_PROMPT
-
 
         if (params.projectBasePath != null) {
             val projectContext =
@@ -129,7 +185,7 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
                 append(params.diagnosticsInfo)
             }
         }
-        systemPrompt = if (externalContext.isEmpty()) {
+        return if (externalContext.isEmpty()) {
             systemPrompt.replace(
                 "{{EXTERNAL_CONTEXT}}",
                 "## External Context\n\nNo external context selected."
@@ -140,25 +196,13 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
                 "## External Context$externalContext"
             )
         }
-
-        val userPrompt = buildString {
-            if (!params.selectedText.isNullOrBlank()) {
-                append("Selected code:\n")
-                append("```$language\n")
-                append(params.selectedText)
-                append("\n```\n\n")
-            }
-            append("Request: ${params.prompt}")
-        }
-
-        return InlineEditPrompts(systemPrompt, userPrompt)
     }
 
     override fun createInlineEditRequest(params: InlineEditCompletionParameters): CompletionRequest {
-        val prepared = prepareInlineEditPrompts(params)
+        val systemPrompt = prepareInlineEditSystemPrompt(params)
         return createBasicCompletionRequest(
-            prepared.systemPrompt,
-            prepared.userPrompt,
+            systemPrompt,
+            "systemPrompt.userPrompt",
             AUTO_APPLY_MAX_TOKENS,
             true,
             FeatureType.INLINE_EDIT
@@ -192,7 +236,10 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
 
         val formattedSource = CompletionRequestUtil.formatCodeWithLanguage(params.source, language)
         val formattedDestination =
-            CompletionRequestUtil.formatCode(EditorUtil.getFileContent(destination), destination.path)
+            CompletionRequestUtil.formatCode(
+                EditorUtil.getFileContent(destination),
+                destination.path
+            )
 
         val systemPromptTemplate = service<FilteredPromptsService>().getFilteredAutoApplyPrompt(
             params.chatMode,
@@ -231,5 +278,41 @@ abstract class BaseRequestFactory : CompletionRequestFactory {
                 )
             }
         } ?: return callParameters.message.prompt
+    }
+
+    protected fun composeNextEditMessage(
+        params: NextEditParameters,
+        formatResult: FormatResult
+    ): String {
+        val (project) = params
+        val recentlyViewedBlock = NextEditPromptUtil.buildRecentlyViewedBlock(
+            project,
+            params.filePath,
+            MAX_RECENTLY_VIEWED_SNIPPETS,
+            RECENTLY_VIEWED_LINES
+        )
+
+        val promptBuilder = StringBuilder()
+        promptBuilder.append(recentlyViewedBlock)
+
+        promptBuilder.append("\n").append(formatResult.formattedContent).append("\n\n")
+
+        promptBuilder.append("<|edit_diff_history|>\n")
+        val gitDiffRaw = params.gitDiff ?: buildEditDiffHistory(project)
+        if (gitDiffRaw.isNotEmpty()) {
+            promptBuilder.append(gitDiffRaw).append('\n')
+        }
+        promptBuilder.append("<|/edit_diff_history|>\n")
+
+        return promptBuilder.toString()
+    }
+
+    protected fun buildEditDiffHistory(project: Project?): String {
+        if (project == null) return ""
+        return try {
+            GitUtil.getCurrentChanges(project).orEmpty()
+        } catch (_: Exception) {
+            ""
+        }
     }
 }

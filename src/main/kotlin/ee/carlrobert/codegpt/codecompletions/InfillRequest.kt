@@ -1,7 +1,8 @@
 package ee.carlrobert.codegpt.codecompletions
 
+import com.intellij.openapi.application.runReadAction
 import com.intellij.openapi.components.service
-import com.intellij.openapi.editor.Document
+import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.util.TextRange
 import com.intellij.psi.PsiElement
 import ee.carlrobert.codegpt.EncodingManager
@@ -15,7 +16,9 @@ class InfillRequest private constructor(
     val prefix: String,
     val suffix: String,
     val caretOffset: Int,
+    val editor: Editor?,
     val fileDetails: FileDetails?,
+    val gitDiff: String?,
     val repositoryName: String?,
     val dependenciesStructure: Set<ClassStructure>?,
     val context: InfillContext?,
@@ -29,7 +32,8 @@ class InfillRequest private constructor(
         private val suffix: String
         private val caretOffset: Int
         private var fileDetails: FileDetails? = null
-        private var additionalContext: String? = null
+        private var editor: Editor? = null
+        private var gitDiff: String? = null
         private var repositoryName: String? = null
         private var dependenciesStructure: Set<ClassStructure>? = null
         private var context: InfillContext? = null
@@ -46,10 +50,9 @@ class InfillRequest private constructor(
             this.stopTokens = getStopTokens()
         }
 
-        constructor(
-            document: Document,
-            caretOffset: Int,
-        ) {
+        constructor(editor: Editor) {
+            val document = editor.document
+            val caretOffset = runReadAction { editor.caretModel.offset }
             prefix =
                 document.getText(TextRange(0, caretOffset))
                     .truncateText(MAX_PROMPT_TOKENS, false)
@@ -58,11 +61,12 @@ class InfillRequest private constructor(
                     .truncateText(MAX_PROMPT_TOKENS)
             this.caretOffset = caretOffset
             this.stopTokens = getStopTokens()
+            this.editor = editor
+            this.fileDetails = FileDetails(editor.document.text, editor.virtualFile.path)
         }
 
-        fun fileDetails(fileDetails: FileDetails) = apply { this.fileDetails = fileDetails }
-        fun additionalContext(additionalContext: String) =
-            apply { this.additionalContext = additionalContext }
+        fun gitDiff(gitDiff: String) =
+            apply { this.gitDiff = gitDiff }
 
         fun addRepositoryName(repositoryName: String) =
             apply { this.repositoryName = repositoryName }
@@ -90,8 +94,8 @@ class InfillRequest private constructor(
         }
 
         fun build(): InfillRequest {
-            val modifiedPrefix = if (!additionalContext.isNullOrEmpty()) {
-                "/*\n${additionalContext}\n*/\n\n$prefix"
+            val modifiedPrefix = if (!gitDiff.isNullOrEmpty()) {
+                "/*\n${gitDiff}\n*/\n\n$prefix"
             } else {
                 prefix
             }
@@ -99,7 +103,9 @@ class InfillRequest private constructor(
                 modifiedPrefix,
                 suffix,
                 caretOffset,
+                editor,
                 fileDetails,
+                gitDiff,
                 repositoryName,
                 dependenciesStructure,
                 context,

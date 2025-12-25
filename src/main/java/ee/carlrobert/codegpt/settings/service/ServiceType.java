@@ -19,14 +19,6 @@ public enum ServiceType {
   private final String label;
   private final String completionCode;
 
-  private static final Map<String, ServiceType> CLIENT_CODE_MAP = new HashMap<>();
-
-  static {
-    for (ServiceType type : values()) {
-      CLIENT_CODE_MAP.put(type.getCompletionCode(), type);
-    }
-  }
-
   ServiceType(String code, String messageKey, String completionCode) {
     this.code = code;
     this.label = CodeGPTBundle.get(messageKey);
@@ -48,13 +40,5 @@ public enum ServiceType {
   @Override
   public String toString() {
     return label;
-  }
-
-  public static ServiceType fromClientCode(String clientCode) {
-    ServiceType serviceType = CLIENT_CODE_MAP.get(clientCode);
-    if (serviceType == null) {
-      throw new RuntimeException("Provided client code '" + clientCode + "' is not supported");
-    }
-    return serviceType;
   }
 }
